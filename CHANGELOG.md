@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 - 2026-07-11
+
+- Package the Codex marketplace under its canonical `.agents/plugins` layout.
+- Bundle the LaTeX package and bootstrap contract with the installed plugin.
+- Check distribution copies for drift in CI.
+
 ## 0.1.0 - 2026-07-11
 
 - Add the `\agentedit{id}{reason}{original}{edited}` LaTeX package.

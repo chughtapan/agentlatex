@@ -8,7 +8,7 @@
       "name": "agentedit-guard",
       "source": {
         "source": "local",
-        "path": "."
+        "path": "./plugins/agentedit-guard"
       },
       "policy": {
         "installation": "AVAILABLE",

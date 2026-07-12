@@ -7,7 +7,13 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "guard_agent_edits.py"
+SCRIPT = (
+    Path(__file__).parents[1]
+    / "plugins"
+    / "agentedit-guard"
+    / "scripts"
+    / "guard_agent_edits.py"
+)
 SPEC = importlib.util.spec_from_file_location("guard_agent_edits", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 GUARD = importlib.util.module_from_spec(SPEC)

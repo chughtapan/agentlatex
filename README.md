@@ -43,7 +43,7 @@ both the strict build and the warning-mode review build before finishing.
 For Codex, install the guard first:
 
 ```sh
-codex plugin marketplace add chughtapan/agentlatex --ref main
+codex plugin marketplace add chughtapan/agentlatex --ref v0.1.1
 codex plugin add agentedit-guard --marketplace agentlatex
 ```
 
@@ -206,12 +206,12 @@ agents not to bypass it with alternate write paths.
 ## Repository Layout
 
 ```text
-latex/agentedit.sty                 LaTeX package
-skills/agentedit-guard/SKILL.md     Codex workflow and bootstrap policy
-scripts/guard_agent_edits.py        PreToolUse validator
-overleaf/                            Overleaf mode file and setup
-examples/                            Warning and strict build examples
-tests/                               Guard tests
+latex/agentedit.sty                                  LaTeX package
+.agents/plugins/marketplace.json                     Codex marketplace
+plugins/agentedit-guard/                              Codex plugin
+overleaf/                                             Overleaf setup
+examples/                                             Build examples
+tests/                                                Distribution tests
 ```
 
 ## Development
