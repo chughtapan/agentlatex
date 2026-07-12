@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If AgentLaTeX supports your work, cite this software repository."
+title: AgentLaTeX
+type: software
+authors:
+  - family-names: Chugh
+    given-names: Tapan
+repository-code: "https://github.com/chughtapan/agentlatex"
+url: "https://github.com/chughtapan/agentlatex"
+license: MIT
+version: 0.1.0
+date-released: 2026-07-11

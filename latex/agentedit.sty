@@ -1,0 +1,47 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{agentedit}[2026/07/11 v0.1.0 Reviewable AI-assisted edits]
+
+\newcounter{agenteditcount}
+
+% Documents may redefine this in the preamble. The default renders the edited
+% source while retaining the identifier, reason, and original source in TeX.
+\providecommand{\AgentEditRender}[4]{#4}
+
+\newcommand{\agenteditflag}[2]{%
+  \stepcounter{agenteditcount}%
+  \typeout{AGENT-EDIT-MARKER: \detokenize{#1}; reason:
+    \detokenize{#2}; source line \the\inputlineno}%
+  \ifdefined\AgentWritingReportMode
+    \PackageWarning{agentedit}{Unverified agent edit `\detokenize{#1}' at
+      source line \the\inputlineno. Reason: \detokenize{#2}}%
+  \else
+    \PackageError{agentedit}{Unverified agent edit `\detokenize{#1}' at
+      source line \the\inputlineno}{Reason: \detokenize{#2}. A human must
+      review this edit and remove its \string\agentedit\space wrapper. Define
+      \string\AgentWritingReportMode\space before loading the package to
+      produce a review build.}%
+  \fi
+}
+
+\newcommand{\agentedit}[4]{%
+  \if\relax\detokenize{#1}\relax
+    \PackageError{agentedit}{An agent edit has no stable identifier}{Supply a
+      non-empty first argument to \string\agentedit.}%
+  \fi
+  \if\relax\detokenize{#2}\relax
+    \PackageError{agentedit}{Agent edit `\detokenize{#1}' has no reason}{Supply
+      a concise, non-empty second argument to \string\agentedit.}%
+  \fi
+  \agenteditflag{#1}{#2}%
+  \AgentEditRender{#1}{#2}{#3}{#4}%
+}
+
+\AtEndDocument{%
+  \typeout{AGENT-EDIT-REPORT: \arabic{agenteditcount} unresolved marker(s).}%
+  \ifnum\value{agenteditcount}>0
+    \PackageWarningNoLine{agentedit}{Final report: \arabic{agenteditcount}
+      unresolved agent edit marker(s)}%
+  \fi
+}
+
+\endinput

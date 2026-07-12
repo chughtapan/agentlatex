@@ -1,0 +1,3 @@
+% AgentEdit warning-mode switch for Overleaf.
+% Comment the next line to restore strict validation.
+\def\AgentWritingReportMode{1}
