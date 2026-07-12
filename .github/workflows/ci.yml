@@ -23,7 +23,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y texlive-latex-base
       - working-directory: examples
-        run: TEXINPUTS=../latex: pdflatex -interaction=nonstopmode -halt-on-error example.tex
+        run: |
+          TEXINPUTS=../latex: pdflatex -interaction=nonstopmode -halt-on-error example.tex
       - working-directory: examples
         run: |
           if TEXINPUTS=../latex: pdflatex -interaction=nonstopmode strict-example.tex; then
