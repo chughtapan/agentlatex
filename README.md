@@ -44,7 +44,7 @@ both the strict build and the warning-mode review build before finishing.
 For Codex, install the guard first:
 
 ```sh
-codex plugin marketplace add chughtapan/agentlatex --ref v0.1.1
+codex plugin marketplace add chughtapan/agentlatex --ref v0.2.0
 codex plugin add agentedit-guard --marketplace agentlatex
 ```
 
