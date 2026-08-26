@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0 - 2026-08-26
+
+### Added
+
+- Install AgentEdit Guard from the same repository in Claude Code and Claude
+  Desktop Cowork, with native Claude plugin and marketplace manifests.
+- Guard common Claude filesystem MCP edits and PowerShell mutations.
+
+### Changed
+
+- Validate only proposed replacement text, so an existing marker cannot
+  authorize its own removal.
+- Validate every batch edit and patch target independently, including targets
+  governed by a policy outside the agent's current working directory.
+- Document the host support matrix and the boundary between Cowork hooks and
+  ordinary Claude Chat.
+
 ## 0.2.0 - 2026-08-26
 
 ### Added

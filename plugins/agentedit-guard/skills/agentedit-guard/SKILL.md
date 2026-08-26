@@ -1,6 +1,9 @@
 ---
 name: agentedit-guard
-description: "Enforce reviewable AI provenance whenever Codex edits LaTeX or BibTeX in a project containing .agentedit.json. Retain stable IDs, reasons, original source, edited source, and DBLP verification markers."
+description: >-
+  Enforce reviewable AI provenance whenever an agent edits LaTeX or BibTeX in a
+  project containing .agentedit.json. Retain stable IDs, reasons, original
+  source, edited source, and DBLP verification markers.
 ---
 
 # AgentEdit Guard

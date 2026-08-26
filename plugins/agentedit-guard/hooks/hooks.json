@@ -1,0 +1,20 @@
+{
+  "description": "Block unmarked changes to protected LaTeX and BibTeX files.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Write|Edit|MultiEdit|apply_patch|write_file|edit_file|exec|exec_command|Bash|PowerShell|mcp__.*__(write_file|edit_file))$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/guard_agent_edits.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

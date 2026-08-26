@@ -9,8 +9,8 @@ Every revision stays next to the original source and includes a stable ID and
 the agent's reason. You read the proposed paper by default, but the build stays
 red until a human accepts every outstanding edit.
 
-A small LaTeX package handles rendering and validation. An optional Codex
-plugin prevents agents from writing untracked changes.
+A small LaTeX package handles rendering and validation. An optional guard
+plugin prevents Codex and Claude from writing untracked changes.
 
 ```tex
 \agentedit{intro-claim}
@@ -22,8 +22,8 @@ plugin prevents agents from writing untracked changes.
 AgentLaTeX includes:
 
 - `agentedit.sty`, a small LaTeX package with strict and review validation.
-- `agentedit-guard`, a Codex plugin that blocks unmarked `.tex` and `.bib`
-  edits in protected projects.
+- `agentedit-guard`, a Codex and Claude plugin that blocks unmarked `.tex` and
+  `.bib` edits in protected projects.
 - `agentedit-review`, a keyboard-first Emacs command backed by native Ediff.
 - Bootstrap instructions for local LaTeX projects and Overleaf.
 
@@ -44,11 +44,24 @@ both the strict build and the warning-mode review build before finishing.
 For Codex, install the guard first:
 
 ```sh
-codex plugin marketplace add chughtapan/agentlatex --ref v0.2.0
+codex plugin marketplace add chughtapan/agentlatex --ref v0.3.0
 codex plugin add agentedit-guard --marketplace agentlatex
 ```
 
-Then tell Codex:
+For Claude Code, install the same guard from its Claude marketplace:
+
+```sh
+claude plugin marketplace add chughtapan/agentlatex@v0.3.0
+claude plugin install agentedit-guard@agentlatex
+```
+
+For Claude Desktop Cowork, open **Customize**, then **Plugins** and
+**Add marketplace**. Add
+`https://github.com/chughtapan/agentlatex`, then install AgentEdit Guard. Hooks
+run in Cowork and the Desktop Code tab; ordinary Claude Chat can use the skill
+but does not run the guard hook.
+
+Then tell the agent:
 
 ```text
 Use the agentedit-guard skill to bootstrap AgentLaTeX in this project. Show edit
@@ -75,7 +88,7 @@ reasons with the project's existing TODO-note command.
    \input{main.tex}
    ```
 
-4. Add `.agentedit.json` last to activate the Codex hook:
+4. Add `.agentedit.json` last to activate the installed guard hook:
 
    ```json
    {
@@ -129,7 +142,7 @@ four-argument hook after loading the package:
 \usepackage{agentedit}
 
 \long\def\AgentEditRender#1#2#3#4{%
-  #4\todo{Codex [#1]: #2}%
+  #4\todo{AI [#1]: #2}%
 }
 ```
 
@@ -216,11 +229,24 @@ GitHub synchronization guidance.
 
 ## How Enforcement Works
 
-The Codex plugin activates only below a directory containing `.agentedit.json`.
-Its `PreToolUse` hook inspects direct write tools, patches, and common mutating
-shell commands. A proposed TeX change must expose a complete four-argument
-`\agentedit` call. A proposed BibTeX change must expose the complete provenance
-record and DBLP metadata.
+The plugin activates for a target below a directory containing
+`.agentedit.json`. Its `PreToolUse` hook inspects direct write tools, patches,
+common filesystem MCP edits, and common mutating shell commands. Each proposed
+TeX mutation must expose a complete four-argument `\agentedit` call. Each
+proposed BibTeX mutation must expose the complete provenance record and DBLP
+metadata.
+
+Host | Skill | Guard hook
+--- | --- | ---
+Codex | Yes | Yes
+Claude Code CLI or Desktop Code | Yes | Yes
+Claude Desktop Cowork | Yes | Yes
+Claude Chat | Yes | No
+
+The hook runtime must expose Python 3.10 or newer as `python3`. AgentLaTeX does
+not pin a Claude release; use a current Claude Code or Desktop build with plugin
+hooks. The version 0.3.0 manifests pass Claude Code 2.1.246 validation. Run a
+Cowork smoke test after installation because hooks execute in its environment.
 
 `AGENTEDIT-BOOTSTRAP` is a narrow escape marker for the exact files listed in
 `.agentedit.json`. It exists because the files that load the provenance package
@@ -228,15 +254,17 @@ cannot wrap that package load in the macro being defined. Do not list manuscript
 section files as bootstrap files.
 
 The hook is a development guardrail, not a security boundary. Arbitrary local
-programs and humans can still modify files. The skill therefore also instructs
-agents not to bypass it with alternate write paths.
+programs, unsupported MCP write schemas, computer-use actions, and humans can
+still modify files. The skill therefore also instructs agents not to bypass it
+with alternate write paths.
 
 ## Repository Layout
 
 ```text
 latex/agentedit.sty                                  LaTeX package
 .agents/plugins/marketplace.json                     Codex marketplace
-plugins/agentedit-guard/                              Codex plugin
+.claude-plugin/marketplace.json                       Claude marketplace
+plugins/agentedit-guard/                              Shared guard plugin
 emacs/                                                Emacs reviewer and guide
 overleaf/                                             Overleaf setup
 examples/                                             Build examples

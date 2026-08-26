@@ -15,7 +15,7 @@ When bootstrap is complete:
    rendering the edited source.
 4. A review build changes marker errors to warnings and prints a final count.
 5. Every reason is visible using the project's TODO-note style when one exists.
-6. `.agentedit.json` activates the Codex hook only after the setup files work.
+6. `.agentedit.json` activates the guard hook only after the setup files work.
 7. `AGENTS.md` records the TeX, BibTeX, citation, and acceptance rules.
 
 ## Step 1: Inspect The Project
@@ -34,7 +34,7 @@ Do not overwrite user changes or introduce a second TODO package unnecessarily.
 ## Step 2: Install The Style File
 
 Copy `latex/agentedit.sty` from this repository into the target project's top
-level. When operating from the installed Codex plugin, resolve the plugin root
+level. When operating from the installed guard plugin, resolve the plugin root
 from `skills/agentedit-guard/SKILL.md`; the style file is at
 `../../latex/agentedit.sty` relative to that skill directory.
 
@@ -57,7 +57,7 @@ to the project instead of copying this example blindly:
 \usepackage{agentedit}
 
 \long\def\AgentEditRender#1#2#3#4{%
-  #4\todo{Codex [#1]: #2}%
+  #4\todo{AI [#1]: #2}%
 }
 ```
 
@@ -86,7 +86,7 @@ entry point:
 ```tex
 % AGENTEDIT-BOOTSTRAP: Original-view review entry point.
 \def\AgentWritingReportMode{1}
-\long\def\AgentEditRender#1#2#3#4{#3\todo{Codex [#1]: #2}}
+\long\def\AgentEditRender#1#2#3#4{#3\todo{AI [#1]: #2}}
 \input{main.tex}
 ```
 
@@ -172,7 +172,7 @@ Tell the user:
 - Which files were added or changed.
 - Which renderer and TODO-note command were selected.
 - The strict-build result and review-build result.
-- Whether the Codex plugin is installed and active.
+- Whether the guard plugin is installed and active.
 - Any project-specific limitation, especially an Overleaf Main-document issue.
 
 Do not claim the paper is clean merely because a warning-mode PDF exists.
