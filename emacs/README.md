@@ -156,4 +156,3 @@ AUCTeX 14.1.0 and 14.1.2. See the installation matrix and test commands in
 
 - [Project overview and LaTeX setup](../README.md)
 - [Agent bootstrap contract](../BOOTSTRAP.md)
-- [Reviewer design and safety model](../docs/designs/agentlatex-ediff-review.md)
