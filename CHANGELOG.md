@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.0 - 2026-08-26
+
+### Added
+
+- Review AgentLaTeX markers in Emacs through one context-aware
+  `agentedit-review` command, with Ediff accept, reject, and skip controls.
+- Review complete AUCTeX master documents while preserving native
+  `TeX-master` prompting and file-local behavior; use `C-u` for the current file.
+- See whole-hunk and character-level differences in native horizontal or
+  vertical Ediff layouts, with unsaved and independently undoable decisions.
+- Configure ignored verbatim environments and follow a lightweight team setup
+  and troubleshooting guide.
+
+### Changed
+
+- Support Emacs 29.4 and newer with built-in TeX modes; test capability-based
+  AUCTeX integration against versions 14.1.0 and 14.1.2.
+- Recognize only the exact `\agentedit` TeX control word in the guard and
+  reviewer, including TeX-aware comment and verbatim handling.
+
 ## 0.1.1 - 2026-07-11
 
 - Package the Codex marketplace under its canonical `.agents/plugins` layout.

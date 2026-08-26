@@ -37,6 +37,25 @@ class DistributionLayoutTests(unittest.TestCase):
             (PLUGIN / "skills" / "agentedit-guard" / "SKILL.md").is_file()
         )
 
+    def test_emacs_reviewer_is_distributed(self) -> None:
+        self.assertTrue((ROOT / "emacs" / "agentedit-review.el").is_file())
+
+    def test_release_versions_match(self) -> None:
+        version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+        citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
+        manifest = json.loads(
+            (PLUGIN / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+        public_package = (ROOT / "latex" / "agentedit.sty").read_text(
+            encoding="utf-8"
+        )
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn(f"\nversion: {version}\n", citation)
+        self.assertEqual(manifest["version"], version)
+        self.assertIn(f"v{version} Reviewable AI-assisted edits", public_package)
+        self.assertIn(f"--ref v{version}", readme)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -61,6 +61,31 @@ class AgentEditGuardTests(unittest.TestCase):
         )
         self.assertTrue(allowed)
 
+    def test_requires_exact_agentedit_control_word(self) -> None:
+        cases = {
+            "control symbol": (
+                r"\\agentedit{id}{Reason.}{old}{new}",
+                False,
+            ),
+            "longer control word": (
+                r"\agentediting{id}{Reason.}{old}{new}",
+                False,
+            ),
+            "independent token after control symbol": (
+                r"\\ \agentedit{id}{Reason.}{old}{new}",
+                True,
+            ),
+        }
+        for label, (source, expected) in cases.items():
+            with self.subTest(label=label):
+                allowed, _ = GUARD.evaluate(
+                    self.payload(
+                        "Edit",
+                        {"file_path": "paper.tex", "new_string": source},
+                    )
+                )
+                self.assertEqual(allowed, expected)
+
     def test_blocks_tex_edit_without_reason(self) -> None:
         source = r"\agentedit{intro}{}{old text}{new text}"
         allowed, _ = GUARD.evaluate(

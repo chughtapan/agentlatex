@@ -24,6 +24,7 @@ AgentLaTeX includes:
 - `agentedit.sty`, a small LaTeX package with strict and review validation.
 - `agentedit-guard`, a Codex plugin that blocks unmarked `.tex` and `.bib`
   edits in protected projects.
+- `agentedit-review`, a keyboard-first Emacs command backed by native Ediff.
 - Bootstrap instructions for local LaTeX projects and Overleaf.
 
 ## Point Your Agent Here
@@ -43,7 +44,7 @@ both the strict build and the warning-mode review build before finishing.
 For Codex, install the guard first:
 
 ```sh
-codex plugin marketplace add chughtapan/agentlatex --ref v0.1.1
+codex plugin marketplace add chughtapan/agentlatex --ref v0.2.0
 codex plugin add agentedit-guard --marketplace agentlatex
 ```
 
@@ -91,6 +92,33 @@ The package default renders the edited source. Its normal validation mode emits
 a package error for every unresolved marker. Defining
 `\AgentWritingReportMode` before loading the package changes those errors to
 warnings and prints a final marker count, allowing a complete review PDF.
+
+## Review in Emacs
+
+The experimental reviewer supports Emacs 29.4 and newer and loads directly
+from a repository checkout:
+
+```elisp
+(use-package agentedit-review
+  :ensure nil
+  :commands (agentedit-review)
+  :load-path "/absolute/path/to/agentlatex/emacs")
+```
+
+Open a writable, widened TeX buffer and run `M-x agentedit-review`. In an AUCTeX
+buffer, the command reviews the complete master document. In a built-in TeX
+buffer, it reviews the current file from point. Use `C-u M-x agentedit-review`
+to force current-file review from point under AUCTeX.
+
+- `A` accepts the proposed source.
+- `R` restores the original source.
+- `S` leaves the wrapper unresolved and advances.
+- `q` confirms before stopping the pass.
+
+Accept and reject are isolated undo steps. The command never saves the source
+buffer, and a stale wrapper is never overwritten. See the
+[complete team setup, AUCTeX behavior, configuration, and troubleshooting
+guide](emacs/README.md).
 
 ## Show Reasons As TODOs
 
@@ -209,6 +237,7 @@ agents not to bypass it with alternate write paths.
 latex/agentedit.sty                                  LaTeX package
 .agents/plugins/marketplace.json                     Codex marketplace
 plugins/agentedit-guard/                              Codex plugin
+emacs/                                                Emacs reviewer and guide
 overleaf/                                             Overleaf setup
 examples/                                             Build examples
 tests/                                                Distribution tests
@@ -221,6 +250,17 @@ Run the guard tests:
 ```sh
 python3 -m unittest discover -s tests -v
 ```
+
+Run the built-in-mode Emacs tests with Emacs 29.4 or newer:
+
+```sh
+emacs --batch -Q -L emacs \
+  -l tests/emacs/agentedit-review-tests.el \
+  -f ert-run-tests-batch-and-exit
+```
+
+CI runs the suite with Emacs 29.4 and 30.2, both with built-in TeX and with
+AUCTeX 14.1.0 and 14.1.2.
 
 Compile the warning-mode example:
 
