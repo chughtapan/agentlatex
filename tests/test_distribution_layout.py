@@ -37,6 +37,9 @@ class DistributionLayoutTests(unittest.TestCase):
             (PLUGIN / "skills" / "agentedit-guard" / "SKILL.md").is_file()
         )
 
+    def test_emacs_reviewer_is_distributed(self) -> None:
+        self.assertTrue((ROOT / "emacs" / "agentedit-review.el").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

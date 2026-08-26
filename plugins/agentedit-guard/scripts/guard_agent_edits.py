@@ -149,10 +149,38 @@ def parse_braced(text: str, start: int) -> tuple[str, int] | None:
     return None
 
 
+def is_ascii_letter(char: str) -> bool:
+    """Return whether CHAR has TeX's ordinary control-word letter shape."""
+    return "A" <= char <= "Z" or "a" <= char <= "z"
+
+
+def tex_control_words(material: str) -> list[tuple[str, int]]:
+    """Return TeX control words and their ending offsets in source order."""
+    words: list[tuple[str, int]] = []
+    cursor = 0
+    while cursor < len(material):
+        if material[cursor] != "\\":
+            cursor += 1
+            continue
+
+        word_start = cursor + 1
+        if word_start >= len(material) or not is_ascii_letter(material[word_start]):
+            cursor += 2
+            continue
+
+        word_end = word_start + 1
+        while word_end < len(material) and is_ascii_letter(material[word_end]):
+            word_end += 1
+        words.append((material[word_start:word_end], word_end))
+        cursor = word_end
+    return words
+
+
 def valid_agentedit_calls(material: str) -> list[tuple[str, str]]:
     calls: list[tuple[str, str]] = []
-    for match in re.finditer(r"\\+agentedit\b", material):
-        cursor = match.end()
+    for control_word, cursor in tex_control_words(material):
+        if control_word != "agentedit":
+            continue
         arguments: list[str] = []
         for _ in range(4):
             parsed = parse_braced(material, cursor)
