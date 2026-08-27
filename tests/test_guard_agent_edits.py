@@ -191,6 +191,83 @@ class AgentEditGuardTests(unittest.TestCase):
                 )
                 self.assertEqual(allowed, expected)
 
+    def test_ignores_agentedit_in_tex_comments(self) -> None:
+        cases = {
+            "line comment": r"% \agentedit{id}{Reason.}{old}{new}",
+            "trailing comment": (
+                r"Visible text % \agentedit{id}{Reason.}{old}{new}"
+            ),
+            "percent after an even slash run": (
+                r"\\% \agentedit{id}{Reason.}{old}{new}"
+            ),
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label):
+                allowed, _ = GUARD.evaluate(
+                    self.payload(
+                        "Edit",
+                        {"file_path": "paper.tex", "new_string": source},
+                    )
+                )
+                self.assertFalse(allowed)
+
+    def test_ignores_agentedit_in_verbatim_content(self) -> None:
+        cases = {
+            "verb": r"\verb|\agentedit{id}{Reason.}{old}{new}|",
+            "verb star": r"\verb*|\agentedit{id}{Reason.}{old}{new}|",
+            "verbatim environment": (
+                "\\begin{verbatim}\n"
+                "\\agentedit{id}{Reason.}{old}{new}\n"
+                "\\end{verbatim}\n"
+            ),
+            "minted environment": (
+                "\\begin{minted}{tex}\n"
+                "\\agentedit{id}{Reason.}{old}{new}\n"
+                "\\end{minted}\n"
+            ),
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label):
+                allowed, _ = GUARD.evaluate(
+                    self.payload(
+                        "Edit",
+                        {"file_path": "paper.tex", "new_string": source},
+                    )
+                )
+                self.assertFalse(allowed)
+
+    def test_allows_visible_marker_after_opaque_tex_content(self) -> None:
+        cases = {
+            "verb": (
+                r"\verb|\agentedit{fake}{Fake.}{old}{new}| "
+                r"\agentedit{real}{Real.}{old}{new}"
+            ),
+            "verbatim environment": (
+                "\\begin{verbatim}\n"
+                "\\agentedit{fake}{Fake.}{old}{new}\n"
+                "\\end{verbatim}\n"
+                "\\agentedit{real}{Real.}{old}{new}\n"
+            ),
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label):
+                allowed, _ = GUARD.evaluate(
+                    self.payload(
+                        "Edit",
+                        {"file_path": "paper.tex", "new_string": source},
+                    )
+                )
+                self.assertTrue(allowed)
+
+    def test_allows_marker_after_escaped_percent(self) -> None:
+        source = r"100\% \agentedit{id}{Reason.}{old}{new}"
+        allowed, _ = GUARD.evaluate(
+            self.payload(
+                "Edit", {"file_path": "paper.tex", "new_string": source}
+            )
+        )
+        self.assertTrue(allowed)
+
     def test_blocks_tex_edit_without_reason(self) -> None:
         source = r"\agentedit{intro}{}{old text}{new text}"
         allowed, _ = GUARD.evaluate(
@@ -302,13 +379,24 @@ class AgentEditGuardTests(unittest.TestCase):
         self.assertFalse(allowed)
 
     def test_blocks_mutating_powershell_command(self) -> None:
-        allowed, _ = GUARD.evaluate(
-            self.payload(
-                "PowerShell",
-                {"command": "Set-Content paper.tex replacement"},
-            )
-        )
-        self.assertFalse(allowed)
+        commands = [
+            "Set-Content paper.tex replacement",
+            "Remove-Item paper.tex",
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                allowed, _ = GUARD.evaluate(
+                    self.payload("PowerShell", {"command": command})
+                )
+                self.assertFalse(allowed)
+
+    def test_blocks_deleting_protected_source_from_shell(self) -> None:
+        for command in ("rm paper.tex", "truncate -s 0 paper.tex"):
+            with self.subTest(command=command):
+                allowed, _ = GUARD.evaluate(
+                    self.payload("Bash", {"command": command})
+                )
+                self.assertFalse(allowed)
 
     def test_apply_patch_ignores_deleted_marker(self) -> None:
         patch = r"""*** Begin Patch

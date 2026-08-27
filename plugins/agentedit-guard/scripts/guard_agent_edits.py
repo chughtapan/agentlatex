@@ -25,7 +25,9 @@ SHELL_TOOLS = {"exec", "exec_command", "bash", "powershell", "shell"}
 MUTATING_SHELL_RE = re.compile(
     r"(?:\bapply_patch\b|\bsed\b[^\n]*(?:\s-i\b|--in-place)|"
     r"\bperl\b[^\n]*\s-pi\b|\b(?:tee|cp|mv)\b|"
-    r"\b(?:Add-Content|Out-File|Set-Content)\b|"
+    r"\b(?:rm|touch|truncate)\b|"
+    r"\b(?:Add-Content|Clear-Content|Copy-Item|Move-Item|New-Item|"
+    r"Out-File|Remove-Item|Rename-Item|Set-Content)\b|"
     r"\blatexindent\b[^\n]*(?:\s-w\b|--overwrite)|"
     r">\s*[^\s;&|]+\.(?:tex|bib)\b)",
     re.IGNORECASE,
@@ -37,6 +39,14 @@ PATCH_HEADER_RE = re.compile(
 PATCH_HUNK_RE = re.compile(r"^@@.*$", re.MULTILINE)
 PATH_RE = re.compile(r"(?<![\w.-])([\w./#-]+\.(?:tex|bib))\b", re.IGNORECASE)
 BOOTSTRAP_MARKER_DEFAULT = "AGENTEDIT-BOOTSTRAP"
+VERBATIM_ENVIRONMENTS = {
+    "verbatim",
+    "verbatim*",
+    "Verbatim",
+    "Verbatim*",
+    "lstlisting",
+    "minted",
+}
 PATH_KEYS = {"file_path", "filepath", "filename", "path"}
 PROPOSED_TEXT_KEYS = {
     "content",
@@ -222,7 +232,7 @@ def parse_braced(text: str, start: int) -> tuple[str, int] | None:
     content_start = cursor
     while cursor < len(text):
         char = text[cursor]
-        escaped = cursor > 0 and text[cursor - 1] == "\\"
+        escaped = is_escaped(text, cursor)
         if char == "{" and not escaped:
             depth += 1
         elif char == "}" and not escaped:
@@ -238,11 +248,55 @@ def is_ascii_letter(char: str) -> bool:
     return "A" <= char <= "Z" or "a" <= char <= "z"
 
 
+def is_escaped(text: str, position: int) -> bool:
+    """Return whether the character at POSITION follows an odd slash run."""
+    slash_count = 0
+    cursor = position - 1
+    while cursor >= 0 and text[cursor] == "\\":
+        slash_count += 1
+        cursor -= 1
+    return slash_count % 2 == 1
+
+
+def verb_end(material: str, word_end: int) -> int:
+    """Return the offset after a TeX verb token, or the end of MATERIAL."""
+    cursor = word_end
+    if cursor < len(material) and material[cursor] == "*":
+        cursor += 1
+    if cursor >= len(material) or material[cursor].isspace():
+        return len(material)
+    delimiter = material[cursor]
+    line_end = material.find("\n", cursor + 1)
+    if line_end < 0:
+        line_end = len(material)
+    closing = material.find(delimiter, cursor + 1, line_end)
+    return len(material) if closing < 0 else closing + 1
+
+
+def verbatim_environment_end(
+    material: str, name: str, content_start: int
+) -> int:
+    """Return the offset after a line-oriented verbatim environment."""
+    terminator = re.compile(
+        rf"^[ \t]*\\end\{{{re.escape(name)}\}}[ \t]*(?:%.*)?$",
+        re.MULTILINE,
+    )
+    match = terminator.search(material, content_start)
+    if match is None:
+        return len(material)
+    newline = material.find("\n", match.end())
+    return len(material) if newline < 0 else newline + 1
+
+
 def tex_control_words(material: str) -> list[tuple[str, int]]:
-    """Return TeX control words and their ending offsets in source order."""
+    """Return visible TeX control words and ending offsets in source order."""
     words: list[tuple[str, int]] = []
     cursor = 0
     while cursor < len(material):
+        if material[cursor] == "%" and not is_escaped(material, cursor):
+            newline = material.find("\n", cursor + 1)
+            cursor = len(material) if newline < 0 else newline + 1
+            continue
         if material[cursor] != "\\":
             cursor += 1
             continue
@@ -257,7 +311,18 @@ def tex_control_words(material: str) -> list[tuple[str, int]]:
         word_end = word_start + 1
         while word_end < len(material) and is_ascii_letter(material[word_end]):
             word_end += 1
-        words.append((material[word_start:word_end], word_end))
+        word = material[word_start:word_end]
+        if word == "verb":
+            cursor = verb_end(material, word_end)
+            continue
+        if word == "begin":
+            parsed = parse_braced(material, word_end)
+            if parsed is not None and parsed[0] in VERBATIM_ENVIRONMENTS:
+                cursor = verbatim_environment_end(
+                    material, parsed[0], parsed[1]
+                )
+                continue
+        words.append((word, word_end))
         cursor = word_end
     return words
 

@@ -16,6 +16,8 @@
   authorize its own removal.
 - Validate every batch edit and patch target independently, including targets
   governed by a policy outside the agent's current working directory.
+- Ignore marker-shaped text inside TeX comments, \verb tokens, and common
+  verbatim environments when validating provenance.
 - Document the host support matrix and the boundary between Cowork hooks and
   ordinary Claude Chat.
 - Use a neutral `AI` reason-note label so papers can move between agent hosts.

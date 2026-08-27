@@ -29,8 +29,8 @@ AgentLaTeX includes:
 
 ## One-Prompt Setup
 
-Open the paper's top-level folder in Codex, Claude Code, Claude Desktop Code, or
-Cowork. Then paste this prompt:
+Open the paper's top-level folder in Codex, Claude Code, the Claude Desktop Code
+tab, or Cowork. Then paste this prompt:
 
 ```text
 Install and configure AgentLaTeX in this LaTeX repository. Read
@@ -259,7 +259,7 @@ metadata.
 Host | Skill | Guard hook
 --- | --- | ---
 Codex | Yes | Yes
-Claude Code CLI or Desktop Code | Yes | Yes
+Claude Code CLI or the Desktop Code tab | Yes | Yes
 Claude Desktop Cowork | Yes | Yes
 Claude Chat | Yes | No
 
