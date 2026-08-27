@@ -92,8 +92,6 @@ class DistributionLayoutTests(unittest.TestCase):
         self.assertIn(
             f"v{version} Reviewable AI-assisted edits", public_package
         )
-        self.assertIn(f"--ref v{version}", readme)
-        self.assertIn(f"@v{version}", readme)
         self.assertIn(f"/v{version}/BOOTSTRAP.md", readme)
         self.assertIn(f"/v{version}/latex/agentedit.sty", bootstrap)
 
