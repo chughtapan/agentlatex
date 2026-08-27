@@ -34,7 +34,7 @@ Cowork. Then paste this prompt:
 
 ```text
 Install and configure AgentLaTeX in this LaTeX repository. Read
-https://raw.githubusercontent.com/chughtapan/agentlatex/main/BOOTSTRAP.md and
+https://raw.githubusercontent.com/chughtapan/agentlatex/v0.3.0/BOOTSTRAP.md and
 follow the complete contract. Detect this agent host, the real document entry
 point, the project's existing TODO-note style, and its build commands instead
 of asking me for routine setup details. Install AgentEdit Guard for this host

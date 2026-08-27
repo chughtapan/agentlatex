@@ -85,7 +85,7 @@ from `skills/agentedit-guard/SKILL.md`; the style file is at
 For an agent without the installed plugin, retrieve the file from:
 
 ```text
-https://raw.githubusercontent.com/chughtapan/agentlatex/main/latex/agentedit.sty
+https://raw.githubusercontent.com/chughtapan/agentlatex/v0.3.0/latex/agentedit.sty
 ```
 
 Commit the copied file to the paper repository. Do not use a symlink or Git

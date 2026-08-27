@@ -83,6 +83,7 @@ class DistributionLayoutTests(unittest.TestCase):
         public_package = (ROOT / "latex" / "agentedit.sty").read_text(
             encoding="utf-8"
         )
+        bootstrap = (ROOT / "BOOTSTRAP.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertIn(f"\nversion: {version}\n", citation)
@@ -93,6 +94,8 @@ class DistributionLayoutTests(unittest.TestCase):
         )
         self.assertIn(f"--ref v{version}", readme)
         self.assertIn(f"@v{version}", readme)
+        self.assertIn(f"/v{version}/BOOTSTRAP.md", readme)
+        self.assertIn(f"/v{version}/latex/agentedit.sty", bootstrap)
 
 
 if __name__ == "__main__":
