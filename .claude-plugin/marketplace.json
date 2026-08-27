@@ -1,0 +1,15 @@
+{
+  "name": "agentlatex",
+  "owner": {
+    "name": "Tapan Chugh",
+    "url": "https://github.com/chughtapan"
+  },
+  "description": "Reviewable AI-assisted edits for LaTeX projects.",
+  "plugins": [
+    {
+      "name": "agentedit-guard",
+      "source": "./plugins/agentedit-guard",
+      "description": "Require provenance for LaTeX and BibTeX changes."
+    }
+  ]
+}

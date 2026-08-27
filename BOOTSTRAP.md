@@ -15,8 +15,42 @@ When bootstrap is complete:
    rendering the edited source.
 4. A review build changes marker errors to warnings and prints a final count.
 5. Every reason is visible using the project's TODO-note style when one exists.
-6. `.agentedit.json` activates the Codex hook only after the setup files work.
+6. `.agentedit.json` activates the guard hook only after the setup files work.
 7. `AGENTS.md` records the TeX, BibTeX, citation, and acceptance rules.
+8. The guard plugin is installed and available when the host supports hooks, or
+   the agent reports the exact host limitation and required human action.
+
+## Step 0: Detect The Host And Enable The Guard
+
+Determine the current agent host from the available runtime and tools. Do not
+ask the user to identify it when it is already evident. If AgentEdit Guard is
+already installed, use its `agentedit-guard` skill and continue to Step 1.
+
+On command-line hosts, install the current release when it is missing:
+
+```sh
+# Codex
+codex plugin marketplace add chughtapan/agentlatex --ref v0.3.0
+codex plugin add agentedit-guard --marketplace agentlatex
+
+# Claude Code
+claude plugin marketplace add chughtapan/agentlatex@v0.3.0
+claude plugin install agentedit-guard@agentlatex
+```
+
+Run only the pair that matches the current host. Do not replace an existing
+newer installation with an older one. If plugin activation requires a session
+reload, finish the project-only bootstrap safely, then tell the user the exact
+reload action and do not claim that the guard is active in the current session.
+
+Claude Desktop may require the user to open **Customize** → **Plugins** →
+**Add marketplace**, add `https://github.com/chughtapan/agentlatex`, and install
+AgentEdit Guard. Ask only for that approval, then resume this contract. Ordinary
+Claude Chat does not execute plugin hooks; it may configure the repository and
+follow the skill, but must report that edits are not hook-enforced.
+
+Plugin installation changes agent configuration, not the manuscript. Continue
+bootstrap without changing paper prose or bibliography data.
 
 ## Step 1: Inspect The Project
 
@@ -28,20 +62,30 @@ scripts, and bibliography configuration. Determine:
 - Which TODO package and author-note macros are already available.
 - How local and Overleaf builds select the entry point.
 - Whether any current working-tree changes belong to the user.
+- Whether AgentLaTeX is already partly or fully configured.
 
 Do not overwrite user changes or introduce a second TODO package unnecessarily.
+Treat setup as idempotent: preserve a compatible existing installation, repair
+missing pieces, and never insert duplicate package loads, renderers, wrappers,
+or policy sections.
+
+If `.agentedit.json` already protects a bootstrap file, include its
+`AGENTEDIT-BOOTSTRAP` marker in the same proposed write or patch hunk as the
+maintenance change. A small edit that sends only the replacement text may be
+rejected because the hook intentionally validates the proposal, not unrelated
+text already present elsewhere in the file.
 
 ## Step 2: Install The Style File
 
 Copy `latex/agentedit.sty` from this repository into the target project's top
-level. When operating from the installed Codex plugin, resolve the plugin root
+level. When operating from the installed guard plugin, resolve the plugin root
 from `skills/agentedit-guard/SKILL.md`; the style file is at
 `../../latex/agentedit.sty` relative to that skill directory.
 
 For an agent without the installed plugin, retrieve the file from:
 
 ```text
-https://raw.githubusercontent.com/chughtapan/agentlatex/main/latex/agentedit.sty
+https://raw.githubusercontent.com/chughtapan/agentlatex/v0.3.0/latex/agentedit.sty
 ```
 
 Commit the copied file to the paper repository. Do not use a symlink or Git
@@ -57,7 +101,7 @@ to the project instead of copying this example blindly:
 \usepackage{agentedit}
 
 \long\def\AgentEditRender#1#2#3#4{%
-  #4\todo{Codex [#1]: #2}%
+  #4\todo{AI [#1]: #2}%
 }
 ```
 
@@ -86,7 +130,7 @@ entry point:
 ```tex
 % AGENTEDIT-BOOTSTRAP: Original-view review entry point.
 \def\AgentWritingReportMode{1}
-\long\def\AgentEditRender#1#2#3#4{#3\todo{Codex [#1]: #2}}
+\long\def\AgentEditRender#1#2#3#4{#3\todo{AI [#1]: #2}}
 \input{main.tex}
 ```
 
@@ -172,7 +216,10 @@ Tell the user:
 - Which files were added or changed.
 - Which renderer and TODO-note command were selected.
 - The strict-build result and review-build result.
-- Whether the Codex plugin is installed and active.
+- Whether the guard plugin is installed and active.
 - Any project-specific limitation, especially an Overleaf Main-document issue.
+
+Use the neutral label `AI` in newly created reason notes. Do not name the notes
+after the current agent host because another agent may edit the same paper.
 
 Do not claim the paper is clean merely because a warning-mode PDF exists.

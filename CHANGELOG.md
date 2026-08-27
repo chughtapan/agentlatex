@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0 - 2026-08-26
+
+### Added
+
+- Install AgentEdit Guard from the same repository in Claude Code and Claude
+  Desktop Cowork, with native Claude plugin and marketplace manifests.
+- Guard common Claude filesystem MCP edits and PowerShell mutations.
+- Bootstrap a paper and its host-specific guard from one copyable prompt, with
+  idempotent setup for repositories that already use AgentLaTeX.
+
+### Changed
+
+- Validate only proposed replacement text, so an existing marker cannot
+  authorize its own removal.
+- Validate every batch edit and patch target independently, including targets
+  governed by a policy outside the agent's current working directory.
+- Ignore marker-shaped text inside TeX comments, \verb tokens, and common
+  verbatim environments when validating provenance.
+- Document the host support matrix and the boundary between Cowork hooks and
+  ordinary Claude Chat.
+- Use a neutral `AI` reason-note label so papers can move between agent hosts.
+
 ## 0.2.0 - 2026-08-26
 
 ### Added

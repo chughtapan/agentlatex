@@ -28,7 +28,7 @@ uses an existing `\todo` command to display the reason:
 
 ```tex
 \long\def\AgentEditRender#1#2#3#4{%
-  #4\todo{Codex [#1]: #2}%
+  #4\todo{AI [#1]: #2}%
 }
 ```
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Deny unmarked Codex edits to TeX and BibTeX in AgentEdit projects."""
+"""Deny unmarked agent edits to TeX and BibTeX in AgentEdit projects."""
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -20,10 +21,13 @@ DIRECT_WRITE_TOOLS = {
     "write_file",
     "edit_file",
 }
-SHELL_TOOLS = {"exec", "exec_command", "bash", "shell"}
+SHELL_TOOLS = {"exec", "exec_command", "bash", "powershell", "shell"}
 MUTATING_SHELL_RE = re.compile(
     r"(?:\bapply_patch\b|\bsed\b[^\n]*(?:\s-i\b|--in-place)|"
     r"\bperl\b[^\n]*\s-pi\b|\b(?:tee|cp|mv)\b|"
+    r"\b(?:rm|touch|truncate)\b|"
+    r"\b(?:Add-Content|Clear-Content|Copy-Item|Move-Item|New-Item|"
+    r"Out-File|Remove-Item|Rename-Item|Set-Content)\b|"
     r"\blatexindent\b[^\n]*(?:\s-w\b|--overwrite)|"
     r">\s*[^\s;&|]+\.(?:tex|bib)\b)",
     re.IGNORECASE,
@@ -32,24 +36,35 @@ PATCH_HEADER_RE = re.compile(
     r"^\*{3} (?:Add|Update|Delete) File:\s*(.+?\.(?:tex|bib))\s*$",
     re.MULTILINE | re.IGNORECASE,
 )
+PATCH_HUNK_RE = re.compile(r"^@@.*$", re.MULTILINE)
 PATH_RE = re.compile(r"(?<![\w.-])([\w./#-]+\.(?:tex|bib))\b", re.IGNORECASE)
 BOOTSTRAP_MARKER_DEFAULT = "AGENTEDIT-BOOTSTRAP"
+VERBATIM_ENVIRONMENTS = {
+    "verbatim",
+    "verbatim*",
+    "Verbatim",
+    "Verbatim*",
+    "lstlisting",
+    "minted",
+}
+PATH_KEYS = {"file_path", "filepath", "filename", "path"}
+PROPOSED_TEXT_KEYS = {
+    "content",
+    "new_string",
+    "new_text",
+    "newstring",
+    "newtext",
+}
+COMMAND_KEYS = {"cmd", "command"}
+PATCH_KEYS = {"input", "patch"}
 
 
-def collect_strings(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        result: list[str] = []
-        for item in value.values():
-            result.extend(collect_strings(item))
-        return result
-    if isinstance(value, list):
-        result = []
-        for item in value:
-            result.extend(collect_strings(item))
-        return result
-    return []
+@dataclasses.dataclass(frozen=True)
+class Mutation:
+    """A proposed change to one file before the write tool executes."""
+
+    path: str
+    proposed_text: str | None
 
 
 def find_policy_root(start: Path) -> Path | None:
@@ -58,6 +73,18 @@ def find_policy_root(start: Path) -> Path | None:
         if (candidate / POLICY_FILE).is_file():
             return candidate
     return None
+
+
+def resolved_target(path: str, cwd: Path) -> Path:
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = cwd / candidate
+    return candidate.resolve()
+
+
+def target_policy_root(path: str, cwd: Path) -> Path | None:
+    """Find the policy governing PATH, even when CWD is another directory."""
+    return find_policy_root(resolved_target(path, cwd).parent)
 
 
 def load_policy(root: Path) -> dict[str, Any]:
@@ -70,61 +97,128 @@ def load_policy(root: Path) -> dict[str, Any]:
 
 def normalized_tool_name(payload: dict[str, Any]) -> str:
     raw = payload.get("tool_name", payload.get("toolName", ""))
-    return str(raw).rsplit(".", 1)[-1].lower()
+    unqualified = str(raw).rsplit(".", 1)[-1]
+    return unqualified.rsplit("__", 1)[-1].lower()
 
 
 def tool_input(payload: dict[str, Any]) -> Any:
     return payload.get("tool_input", payload.get("toolInput", {}))
 
 
-def is_source_mutation(tool: str, material: str) -> bool:
+def is_source_mutation(tool: str, command: str) -> bool:
     if tool in DIRECT_WRITE_TOOLS:
         return True
     if tool in SHELL_TOOLS:
-        return MUTATING_SHELL_RE.search(material) is not None
+        return MUTATING_SHELL_RE.search(command) is not None
     return False
 
 
-def explicit_target_paths(value: Any) -> tuple[bool, list[str]]:
-    found_key = False
+def string_field(value: dict[str, Any], keys: set[str]) -> str | None:
+    """Return the first string field whose normalized key is in KEYS."""
+    for key, item in value.items():
+        if str(key).lower() in keys and isinstance(item, str):
+            return item
+    return None
+
+
+def explicit_target_paths(value: Any) -> list[str]:
     paths: list[str] = []
     if isinstance(value, dict):
         for key, item in value.items():
             lowered = str(key).lower()
-            if lowered in {"file_path", "filepath", "path", "filename"}:
-                found_key = True
-                if isinstance(item, str) and item.lower().endswith((".tex", ".bib")):
+            if lowered in PATH_KEYS:
+                if isinstance(item, str) and item.lower().endswith(
+                    (".tex", ".bib")
+                ):
                     paths.append(item)
-            nested_found, nested_paths = explicit_target_paths(item)
-            found_key = found_key or nested_found
-            paths.extend(nested_paths)
+            paths.extend(explicit_target_paths(item))
     elif isinstance(value, list):
         for item in value:
-            nested_found, nested_paths = explicit_target_paths(item)
-            found_key = found_key or nested_found
-            paths.extend(nested_paths)
-    return found_key, paths
+            paths.extend(explicit_target_paths(item))
+    return paths
 
 
-def patch_sections(material: str) -> dict[str, str]:
+def added_patch_text(section: str) -> str:
+    return "\n".join(
+        line[1:]
+        for line in section.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+
+
+def patch_mutations(material: str) -> list[Mutation]:
+    """Return one mutation per file hunk in an apply_patch payload."""
     matches = list(PATCH_HEADER_RE.finditer(material))
-    sections: dict[str, str] = {}
+    mutations: list[Mutation] = []
     for index, match in enumerate(matches):
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(material)
-        sections[match.group(1).strip()] = material[match.start():end]
-    return sections
+        if index + 1 < len(matches):
+            end = matches[index + 1].start()
+        else:
+            end = len(material)
+        section = material[match.end():end]
+        path = match.group(1).strip()
+        hunks = list(PATCH_HUNK_RE.finditer(section))
+        if not hunks:
+            mutations.append(Mutation(path, added_patch_text(section)))
+            continue
+        for hunk_index, hunk in enumerate(hunks):
+            if hunk_index + 1 < len(hunks):
+                hunk_end = hunks[hunk_index + 1].start()
+            else:
+                hunk_end = len(section)
+            mutations.append(
+                Mutation(path, added_patch_text(section[hunk.end():hunk_end]))
+            )
+    return mutations
 
 
-def target_sections(value: Any, material: str) -> dict[str, str]:
-    sections = patch_sections(material)
-    if sections:
-        return sections
+def direct_mutations(tool: str, value: Any) -> list[Mutation]:
+    """Decode independently reviewable mutations from a direct write tool."""
+    if tool == "apply_patch":
+        if isinstance(value, str):
+            patch = value
+        elif isinstance(value, dict):
+            patch = string_field(value, PATCH_KEYS | COMMAND_KEYS)
+        else:
+            patch = None
+        if patch is None:
+            return [
+                Mutation(path, None) for path in explicit_target_paths(value)
+            ]
+        return patch_mutations(patch)
 
-    found_explicit, paths = explicit_target_paths(value)
-    if found_explicit:
-        return {path: material for path in paths}
+    if not isinstance(value, dict):
+        return []
+    path = string_field(value, PATH_KEYS)
+    edits = value.get("edits")
+    if isinstance(edits, list):
+        mutations: list[Mutation] = []
+        for edit in edits:
+            if not isinstance(edit, dict):
+                continue
+            edit_path = string_field(edit, PATH_KEYS) or path
+            if edit_path is not None:
+                mutations.append(
+                    Mutation(edit_path, string_field(edit, PROPOSED_TEXT_KEYS))
+                )
+        if mutations or path is None:
+            return mutations
+        return [Mutation(path, None)]
+    if path is not None:
+        return [Mutation(path, string_field(value, PROPOSED_TEXT_KEYS))]
+    return [Mutation(target, None) for target in explicit_target_paths(value)]
 
-    return {match.group(1): material for match in PATH_RE.finditer(material)}
+
+def shell_command(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return string_field(value, COMMAND_KEYS) or ""
+    return ""
+
+
+def shell_target_paths(command: str) -> list[str]:
+    return [match.group(1) for match in PATH_RE.finditer(command)]
 
 
 def parse_braced(text: str, start: int) -> tuple[str, int] | None:
@@ -138,7 +232,7 @@ def parse_braced(text: str, start: int) -> tuple[str, int] | None:
     content_start = cursor
     while cursor < len(text):
         char = text[cursor]
-        escaped = cursor > 0 and text[cursor - 1] == "\\"
+        escaped = is_escaped(text, cursor)
         if char == "{" and not escaped:
             depth += 1
         elif char == "}" and not escaped:
@@ -154,24 +248,81 @@ def is_ascii_letter(char: str) -> bool:
     return "A" <= char <= "Z" or "a" <= char <= "z"
 
 
+def is_escaped(text: str, position: int) -> bool:
+    """Return whether the character at POSITION follows an odd slash run."""
+    slash_count = 0
+    cursor = position - 1
+    while cursor >= 0 and text[cursor] == "\\":
+        slash_count += 1
+        cursor -= 1
+    return slash_count % 2 == 1
+
+
+def verb_end(material: str, word_end: int) -> int:
+    """Return the offset after a TeX verb token, or the end of MATERIAL."""
+    cursor = word_end
+    if cursor < len(material) and material[cursor] == "*":
+        cursor += 1
+    if cursor >= len(material) or material[cursor].isspace():
+        return len(material)
+    delimiter = material[cursor]
+    line_end = material.find("\n", cursor + 1)
+    if line_end < 0:
+        line_end = len(material)
+    closing = material.find(delimiter, cursor + 1, line_end)
+    return len(material) if closing < 0 else closing + 1
+
+
+def verbatim_environment_end(
+    material: str, name: str, content_start: int
+) -> int:
+    """Return the offset after a line-oriented verbatim environment."""
+    terminator = re.compile(
+        rf"^[ \t]*\\end\{{{re.escape(name)}\}}[ \t]*(?:%.*)?$",
+        re.MULTILINE,
+    )
+    match = terminator.search(material, content_start)
+    if match is None:
+        return len(material)
+    newline = material.find("\n", match.end())
+    return len(material) if newline < 0 else newline + 1
+
+
 def tex_control_words(material: str) -> list[tuple[str, int]]:
-    """Return TeX control words and their ending offsets in source order."""
+    """Return visible TeX control words and ending offsets in source order."""
     words: list[tuple[str, int]] = []
     cursor = 0
     while cursor < len(material):
+        if material[cursor] == "%" and not is_escaped(material, cursor):
+            newline = material.find("\n", cursor + 1)
+            cursor = len(material) if newline < 0 else newline + 1
+            continue
         if material[cursor] != "\\":
             cursor += 1
             continue
 
         word_start = cursor + 1
-        if word_start >= len(material) or not is_ascii_letter(material[word_start]):
+        if word_start >= len(material) or not is_ascii_letter(
+            material[word_start]
+        ):
             cursor += 2
             continue
 
         word_end = word_start + 1
         while word_end < len(material) and is_ascii_letter(material[word_end]):
             word_end += 1
-        words.append((material[word_start:word_end], word_end))
+        word = material[word_start:word_end]
+        if word == "verb":
+            cursor = verb_end(material, word_end)
+            continue
+        if word == "begin":
+            parsed = parse_braced(material, word_end)
+            if parsed is not None and parsed[0] in VERBATIM_ENVIRONMENTS:
+                cursor = verbatim_environment_end(
+                    material, parsed[0], parsed[1]
+                )
+                continue
+        words.append((word, word_end))
         cursor = word_end
     return words
 
@@ -188,7 +339,11 @@ def valid_agentedit_calls(material: str) -> list[tuple[str, str]]:
                 break
             argument, cursor = parsed
             arguments.append(argument)
-        if len(arguments) == 4 and arguments[0].strip() and arguments[1].strip():
+        if (
+            len(arguments) == 4
+            and arguments[0].strip()
+            and arguments[1].strip()
+        ):
             calls.append((arguments[0].strip(), arguments[1].strip()))
     return calls
 
@@ -219,6 +374,45 @@ def validate_tex(
     )
 
 
+def validate_mutation(
+    mutation: Mutation,
+    cwd: Path,
+    policy_root: Path,
+) -> str | None:
+    """Validate one mutation against the policy that governs its target."""
+    target = resolved_target(mutation.path, cwd)
+    if target.suffix.lower() not in {".tex", ".bib"}:
+        return None
+    if mutation.proposed_text is None:
+        return (
+            f"Blocked edit to {mutation.path}: could not identify the proposed "
+            "replacement text. Retry with a supported file-edit tool."
+        )
+
+    policy = load_policy(policy_root)
+    bootstrap_marker = str(
+        policy.get("bootstrap_marker", BOOTSTRAP_MARKER_DEFAULT)
+    )
+    configured_bootstrap_files = policy.get("bootstrap_files", [])
+    bootstrap_files = {
+        Path(str(path)).as_posix().removeprefix("./")
+        for path in configured_bootstrap_files
+        if isinstance(path, str)
+    }
+    display_path = str(target)
+    if target.suffix.lower() == ".tex":
+        return validate_tex(
+            display_path,
+            mutation.proposed_text,
+            bootstrap_marker,
+            bootstrap_files,
+            policy_root,
+        )
+    if target.suffix.lower() == ".bib":
+        return validate_bib(display_path, mutation.proposed_text)
+    return None
+
+
 def validate_bib(path: str, material: str) -> str | None:
     required_patterns = {
         "AGENT-EDIT-BEGIN": r"%\s*AGENT-EDIT-BEGIN:\s*\S+",
@@ -242,55 +436,47 @@ def validate_bib(path: str, material: str) -> str | None:
         return None
     return (
         f"Blocked edit to {path}: the BibTeX provenance record is missing "
-        f"{', '.join(missing)}. Retain the commented old entry, active new entry, "
+        f"{', '.join(missing)}. Retain the commented old entry, active new "
+        "entry, "
         "reason, and unverified DBLP metadata."
     )
 
 
 def evaluate(payload: dict[str, Any]) -> tuple[bool, str | None]:
     cwd = Path(str(payload.get("cwd") or os.getcwd()))
-    policy_root = find_policy_root(cwd)
-    if policy_root is None:
-        return True, None
-
     value = tool_input(payload)
-    strings = collect_strings(value)
-    material = "\n".join(strings)
     tool = normalized_tool_name(payload)
-    if not is_source_mutation(tool, material):
+    command = shell_command(value) if tool in SHELL_TOOLS else ""
+    if not is_source_mutation(tool, command):
         return True, None
 
-    sections = target_sections(value, material)
-    if not sections:
-        return True, None
-
-    policy = load_policy(policy_root)
-    bootstrap_marker = str(
-        policy.get("bootstrap_marker", BOOTSTRAP_MARKER_DEFAULT)
-    )
-    configured_bootstrap_files = policy.get("bootstrap_files", [])
-    bootstrap_files = {
-        Path(str(path)).as_posix().removeprefix("./")
-        for path in configured_bootstrap_files
-        if isinstance(path, str)
-    }
     failures: list[str] = []
-    for path, section in sections.items():
-        lowered = path.lower()
-        if lowered.endswith(".tex"):
-            failure = validate_tex(
-                path,
-                section,
-                bootstrap_marker,
-                bootstrap_files,
-                policy_root,
+    if tool in SHELL_TOOLS:
+        paths = shell_target_paths(command)
+        protected_paths = [
+            path for path in paths if target_policy_root(path, cwd) is not None
+        ]
+        if protected_paths:
+            joined_paths = ", ".join(protected_paths)
+            failures.append(
+                "Blocked shell mutation of protected source: "
+                f"{joined_paths}. Retry with a supported file-edit tool so the "
+                "guard can inspect the proposed provenance record."
             )
-        elif lowered.endswith(".bib"):
-            failure = validate_bib(path, section)
-        else:
-            failure = None
-        if failure:
-            failures.append(failure)
+        elif find_policy_root(cwd) is not None and not paths:
+            failures.append(
+                "Blocked a source-mutating shell command in an AgentEdit "
+                "project. Retry with a supported file-edit tool so the guard "
+                "can inspect the target and proposed provenance record."
+            )
+    else:
+        for mutation in direct_mutations(tool, value):
+            policy_root = target_policy_root(mutation.path, cwd)
+            if policy_root is None:
+                continue
+            failure = validate_mutation(mutation, cwd, policy_root)
+            if failure is not None:
+                failures.append(failure)
 
     if failures:
         return False, " ".join(failures)
@@ -311,14 +497,18 @@ def main() -> int:
     try:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, OSError):
-        print(json.dumps(deny("AgentEdit guard could not parse the hook input.")))
+        error = deny("AgentEdit guard could not parse the hook input.")
+        print(json.dumps(error))
         return 0
     if not isinstance(payload, dict):
         print(json.dumps(deny("AgentEdit guard expected a JSON object.")))
         return 0
 
     allowed, reason = evaluate(payload)
-    print("{}" if allowed else json.dumps(deny(reason or "AgentEdit policy failed.")))
+    decision = "{}" if allowed else json.dumps(
+        deny(reason or "AgentEdit policy failed.")
+    )
+    print(decision)
     return 0
 
 

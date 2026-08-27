@@ -1,7 +1,7 @@
 {
   "name": "agentedit-guard",
-  "version": "0.2.0",
-  "description": "Enforces AgentEdit provenance records for Codex edits to LaTeX and BibTeX sources.",
+  "version": "0.3.0",
+  "description": "Enforces AgentEdit provenance records for AI edits to LaTeX and BibTeX sources.",
   "author": {
     "name": "Tapan Chugh",
     "url": "https://github.com/chughtapan"
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "AgentEdit Guard",
     "shortDescription": "Require reviewable provenance for LaTeX edits.",
-    "longDescription": "Blocks Codex write tools when a protected TeX or BibTeX change does not retain the original source, edited source, stable identifier, and reason.",
+    "longDescription": "Blocks write tools when a protected TeX or BibTeX change does not retain the original source, edited source, stable identifier, and reason.",
     "developerName": "Tapan Chugh",
     "category": "Developer Tools",
     "capabilities": [
