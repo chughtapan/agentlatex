@@ -27,46 +27,66 @@ AgentLaTeX includes:
 - `agentedit-review`, a keyboard-first Emacs command backed by native Ediff.
 - Bootstrap instructions for local LaTeX projects and Overleaf.
 
-## Point Your Agent Here
+## One-Prompt Setup
 
-Paste this into an agent working in your LaTeX repository:
+Open the paper's top-level folder in Codex, Claude Code, Claude Desktop Code, or
+Cowork. Then paste this prompt:
 
 ```text
-Set up AgentLaTeX in this repository. Read
-https://github.com/chughtapan/agentlatex/blob/main/BOOTSTRAP.md and follow it
-exactly. Do not edit manuscript prose during bootstrap. Configure the renderer
-to show each edit reason using this project's existing TODO-note style. Verify
-both the strict build and the warning-mode review build before finishing.
+Install and configure AgentLaTeX in this LaTeX repository. Read
+https://raw.githubusercontent.com/chughtapan/agentlatex/main/BOOTSTRAP.md and
+follow the complete contract. Detect this agent host, the real document entry
+point, the project's existing TODO-note style, and its build commands instead
+of asking me for routine setup details. Install AgentEdit Guard for this host
+when plugins are supported; if the host requires a human approval in its plugin
+UI, ask me only for that approval and then continue. Use the neutral label `AI`
+for edit reasons. Do not edit manuscript prose or bibliography data during
+setup. Verify the strict build, the warning-mode review build, and guard
+availability before finishing, and report any host limitation honestly.
 ```
 
 [Open the complete agent bootstrap contract](BOOTSTRAP.md).
 
-For Codex, install the guard first:
+The agent performs project discovery, copies the portable style file, configures
+the renderer and review entry points, records the project policy, enables the
+guard, and runs the available checks. Setup is idempotent: in a repository that
+already uses AgentLaTeX, the agent verifies and repairs the installation instead
+of adding a second copy.
+
+Command-line hosts can install the guard automatically. These are the equivalent
+manual commands for Codex:
 
 ```sh
 codex plugin marketplace add chughtapan/agentlatex --ref v0.3.0
 codex plugin add agentedit-guard --marketplace agentlatex
 ```
 
-For Claude Code, install the same guard from its Claude marketplace:
+And for Claude Code:
 
 ```sh
 claude plugin marketplace add chughtapan/agentlatex@v0.3.0
 claude plugin install agentedit-guard@agentlatex
 ```
 
-For Claude Desktop Cowork, open **Customize**, then **Plugins** and
-**Add marketplace**. Add
-`https://github.com/chughtapan/agentlatex`, then install AgentEdit Guard. Hooks
-run in Cowork and the Desktop Code tab; ordinary Claude Chat can use the skill
-but does not run the guard hook.
+Claude Desktop may require the one human step that an agent cannot perform:
+open **Customize** → **Plugins** → **Add marketplace**, add
+`https://github.com/chughtapan/agentlatex`, and install AgentEdit Guard. Resume
+the same conversation afterward. Hooks run in Cowork and the Desktop Code tab;
+ordinary Claude Chat can follow the editing skill but cannot run the guard hook.
 
-Then tell the agent:
+### Share With Your Team
 
-```text
-Use the agentedit-guard skill to bootstrap AgentLaTeX in this project. Show edit
-reasons with the project's existing TODO-note command.
-```
+Commit the project-local setup files (`agentedit.sty`, `.agentedit.json`, the
+review entry points, and `AGENTS.md`) with the paper. Teammates can then open the
+repository and paste the same prompt; it will verify the shared setup and handle
+their per-host guard installation.
+
+For a small team, share the GitHub marketplace URL above. Claude Team and
+Enterprise owners can instead add that marketplace once in
+[organization plugin settings](https://support.claude.com/en/articles/13837433-manage-plugins-for-your-organization)
+and make AgentEdit Guard available, installed by default, or required.
+Plugin approval is per host or centrally managed; the LaTeX review contract
+itself stays in the paper repository.
 
 ## Five-Minute Setup
 

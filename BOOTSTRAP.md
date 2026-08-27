@@ -17,6 +17,40 @@ When bootstrap is complete:
 5. Every reason is visible using the project's TODO-note style when one exists.
 6. `.agentedit.json` activates the guard hook only after the setup files work.
 7. `AGENTS.md` records the TeX, BibTeX, citation, and acceptance rules.
+8. The guard plugin is installed and available when the host supports hooks, or
+   the agent reports the exact host limitation and required human action.
+
+## Step 0: Detect The Host And Enable The Guard
+
+Determine the current agent host from the available runtime and tools. Do not
+ask the user to identify it when it is already evident. If AgentEdit Guard is
+already installed, use its `agentedit-guard` skill and continue to Step 1.
+
+On command-line hosts, install the current release when it is missing:
+
+```sh
+# Codex
+codex plugin marketplace add chughtapan/agentlatex --ref v0.3.0
+codex plugin add agentedit-guard --marketplace agentlatex
+
+# Claude Code
+claude plugin marketplace add chughtapan/agentlatex@v0.3.0
+claude plugin install agentedit-guard@agentlatex
+```
+
+Run only the pair that matches the current host. Do not replace an existing
+newer installation with an older one. If plugin activation requires a session
+reload, finish the project-only bootstrap safely, then tell the user the exact
+reload action and do not claim that the guard is active in the current session.
+
+Claude Desktop may require the user to open **Customize** → **Plugins** →
+**Add marketplace**, add `https://github.com/chughtapan/agentlatex`, and install
+AgentEdit Guard. Ask only for that approval, then resume this contract. Ordinary
+Claude Chat does not execute plugin hooks; it may configure the repository and
+follow the skill, but must report that edits are not hook-enforced.
+
+Plugin installation changes agent configuration, not the manuscript. Continue
+bootstrap without changing paper prose or bibliography data.
 
 ## Step 1: Inspect The Project
 
@@ -28,8 +62,18 @@ scripts, and bibliography configuration. Determine:
 - Which TODO package and author-note macros are already available.
 - How local and Overleaf builds select the entry point.
 - Whether any current working-tree changes belong to the user.
+- Whether AgentLaTeX is already partly or fully configured.
 
 Do not overwrite user changes or introduce a second TODO package unnecessarily.
+Treat setup as idempotent: preserve a compatible existing installation, repair
+missing pieces, and never insert duplicate package loads, renderers, wrappers,
+or policy sections.
+
+If `.agentedit.json` already protects a bootstrap file, include its
+`AGENTEDIT-BOOTSTRAP` marker in the same proposed write or patch hunk as the
+maintenance change. A small edit that sends only the replacement text may be
+rejected because the hook intentionally validates the proposal, not unrelated
+text already present elsewhere in the file.
 
 ## Step 2: Install The Style File
 
@@ -174,5 +218,8 @@ Tell the user:
 - The strict-build result and review-build result.
 - Whether the guard plugin is installed and active.
 - Any project-specific limitation, especially an Overleaf Main-document issue.
+
+Use the neutral label `AI` in newly created reason notes. Do not name the notes
+after the current agent host because another agent may edit the same paper.
 
 Do not claim the paper is clean merely because a warning-mode PDF exists.
