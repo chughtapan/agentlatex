@@ -3,9 +3,11 @@
 [![CI](https://github.com/chughtapan/agentlatex/actions/workflows/ci.yml/badge.svg)](https://github.com/chughtapan/agentlatex/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-AgentLaTeX gives AI-edited LaTeX a compiler-enforced review workflow. It keeps
-the original and proposed source together, records why the agent changed it,
-and leaves every decision to a human reviewer.
+Want an agent to edit your paper, but worried about what it might change?
+AgentLaTeX makes agent edits behave like compiler-enforced tracked changes.
+Every revision stays next to the original source and includes a stable ID and
+the agent's reason. You read the proposed paper by default, but the build stays
+red until a human accepts every outstanding edit.
 
 ## Set up a paper
 
