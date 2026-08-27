@@ -27,7 +27,12 @@ AgentLaTeX includes:
 - `agentedit-review`, a keyboard-first Emacs command backed by native Ediff.
 - Bootstrap instructions for local LaTeX projects and Overleaf.
 
-## One-Prompt Setup
+## Status and support
+
+AgentLaTeX is experimental. Report problems through the
+[AgentLaTeX issue tracker](https://github.com/chughtapan/agentlatex/issues).
+
+## One-prompt setup
 
 Open the paper's top-level folder in Codex, Claude Code, the Claude Desktop Code
 tab, or Cowork. Then paste this prompt:
@@ -61,7 +66,7 @@ codex plugin marketplace add chughtapan/agentlatex --ref v0.3.0
 codex plugin add agentedit-guard --marketplace agentlatex
 ```
 
-And for Claude Code:
+For Claude Code:
 
 ```sh
 claude plugin marketplace add chughtapan/agentlatex@v0.3.0
@@ -74,12 +79,12 @@ open **Customize** → **Plugins** → **Add marketplace**, add
 the same conversation afterward. Hooks run in Cowork and the Desktop Code tab;
 ordinary Claude Chat can follow the editing skill but cannot run the guard hook.
 
-### Share With Your Team
+### Share with your team
 
 Commit the project-local setup files (`agentedit.sty`, `.agentedit.json`, the
-review entry points, and `AGENTS.md`) with the paper. Teammates can then open the
-repository and paste the same prompt; it will verify the shared setup and handle
-their per-host guard installation.
+review entry points, and `AGENTS.md`) with the paper. Teammates can then open
+the repository and paste the same prompt; it will verify the shared setup and
+handle their per-host guard installation.
 
 For a small team, share the GitHub marketplace URL above. Claude Team and
 Enterprise owners can instead add that marketplace once in
@@ -88,7 +93,7 @@ and make AgentEdit Guard available, installed by default, or required.
 Plugin approval is per host or centrally managed; the LaTeX review contract
 itself stays in the paper repository.
 
-## Five-Minute Setup
+## Manual project setup
 
 1. Put [`latex/agentedit.sty`](latex/agentedit.sty) in the paper repository's
    top-level directory.
@@ -153,7 +158,7 @@ buffer, and a stale wrapper is never overwritten. See the
 [complete team setup, AUCTeX behavior, configuration, and troubleshooting
 guide](emacs/README.md).
 
-## Show Reasons As TODOs
+## Show reasons as TODOs
 
 Rendering is ordinary preamble LaTeX, independent of validation. Redefine the
 four-argument hook after loading the package:
@@ -194,7 +199,7 @@ Other useful renderers are:
 
 Changing the renderer never disables strict validation.
 
-## Review Contract
+## Review contract
 
 For TeX, agents must use:
 
@@ -247,7 +252,7 @@ project-local `agentedit.sty` copy rather than adding AgentLaTeX as a submodule.
 See the [complete Overleaf setup](overleaf/README.md), including `latexmkrc` and
 GitHub synchronization guidance.
 
-## How Enforcement Works
+## How enforcement works
 
 The plugin activates for a target below a directory containing
 `.agentedit.json`. Its `PreToolUse` hook inspects direct write tools, patches,
@@ -278,7 +283,7 @@ programs, unsupported MCP write schemas, computer-use actions, and humans can
 still modify files. The skill therefore also instructs agents not to bypass it
 with alternate write paths.
 
-## Repository Layout
+## Repository layout
 
 ```text
 latex/agentedit.sty                                  LaTeX package
