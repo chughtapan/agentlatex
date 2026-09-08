@@ -1250,3 +1250,6 @@
 (provide 'agentedit-review-tests)
 
 ;;; agentedit-review-tests.el ends here
+
+(load (expand-file-name "agentedit-readable-tests.el"
+                        (file-name-directory (or load-file-name buffer-file-name))))

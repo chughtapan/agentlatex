@@ -114,9 +114,12 @@
   :type '(repeat string)
   :group 'agentedit-review)
 
+(defconst agentedit-review-format-version "blocks-v1"
+  "Readable source format supported by this loaded reviewer.")
+
 (cl-defstruct (agentedit-review-record
                (:constructor agentedit-review--make-record))
-  id reason original edited start end snapshot source)
+  id reason original edited start end snapshot source framed whitespace left-context right-context)
 
 (cl-defstruct (agentedit-review-session
                (:constructor agentedit-review--make-session))
@@ -279,20 +282,25 @@ POSITION must point at a backslash."
         (point)))))
 
 (defun agentedit-review--parse-braced-at (position marker-position)
-  "Parse one braced argument at POSITION for the marker at MARKER-POSITION.
-Return a list of the payload and the position after its closing brace."
+  "Parse a raw braced argument at POSITION for MARKER-POSITION.
+Ordinary TeX comments and escaped control symbols do not balance braces."
   (save-excursion
     (goto-char position)
     (skip-chars-forward " \t\r\n")
     (unless (eq (char-after) ?{)
-      (agentedit-review--line-error marker-position
-                                    "expected four braced arguments"))
-    (let* ((open (point))
-           (close (condition-case nil (scan-sexps open 1) (scan-error nil))))
-      (unless close
-        (agentedit-review--line-error marker-position
-                                      "unterminated braced argument"))
-      (list (buffer-substring-no-properties (1+ open) (1- close)) close))))
+      (agentedit-review--line-error marker-position "expected four braced arguments"))
+    (let ((open (point)) (depth 1))
+      (forward-char)
+      (while (and (> depth 0) (< (point) (point-max)))
+        (pcase (char-after)
+          (?\\ (forward-char (min 2 (- (point-max) (point)))))
+          (?% (forward-line 1))
+          (?{ (setq depth (1+ depth)) (forward-char))
+          (?} (setq depth (1- depth)) (forward-char))
+          (_ (forward-char))))
+      (unless (= depth 0)
+        (agentedit-review--line-error marker-position "unterminated braced argument"))
+      (list (buffer-substring-no-properties (1+ open) (1- (point))) (point)))))
 
 (defun agentedit-review--exact-marker-in-tex-p (text)
   "Return non-nil if TEXT contains a visible exact AgentEdit control word.
@@ -379,7 +387,7 @@ BEGIN-POSITION is used to locate an unterminated-environment error."
     (let ((case-fold-search nil)
           (terminator
            (concat "^[ \t]*\\\\end{" (regexp-quote name) "}"
-                   "[ \t]*\\(?:%.*\\)?$")))
+                   "[ \t]*\\(?:%[^\r\n]*\\)?\r?$")))
       (unless (re-search-forward terminator nil t)
         (agentedit-review--line-error
          begin-position "unterminated %s environment" name))
@@ -402,58 +410,124 @@ MARKER-POSITION is used for located errors."
                                       "unterminated \\verb token"))
       (point))))
 
-(defun agentedit-review--scan-records (origin)
-  "Return valid review records whose control word begins at or after ORIGIN."
-  (let ((records nil)
-        (ids (make-hash-table :test #'equal))
-        (cursor (point-min)))
-    (while (< cursor (point-max))
+(defconst agentedit-review--banner-regexp
+  "[ \t]*%%% AGENTEDIT\\(?:[ \t:]\\|\r?$\\)")
+
+(defun agentedit-review--left-context (position)
+  "Return the physical line prefix before POSITION."
+  (save-excursion
+    (goto-char position)
+    (buffer-substring-no-properties (line-beginning-position) position)))
+
+(defun agentedit-review--right-context (position)
+  "Return the first suffix character at POSITION, or the empty EOF witness."
+  (buffer-substring-no-properties position (min (point-max) (1+ position))))
+
+(defun agentedit-review--parse-frame (banner separator)
+  "Parse a visible BANNER owning the active left SEPARATOR and complete tail."
+  (goto-char banner)
+  (unless (looking-at "%%% AGENTEDIT START: \\([A-Za-z0-9][A-Za-z0-9._:-]*\\) %%%\r?\n")
+    (agentedit-review--line-error banner "malformed or orphan AGENTEDIT banner"))
+  (let ((id (match-string-no-properties 1))
+        (macro (match-end 0)))
+    (unless (and separator
+                 (member (buffer-substring-no-properties separator banner)
+                         '("%\n" "%\r\n")))
+      (agentedit-review--line-error banner "missing active left %% separator"))
+    (goto-char macro)
+    (unless (looking-at (regexp-quote "\\agentedit{"))
+      (agentedit-review--line-error banner "START must be followed by agentedit and its ID"))
+    (let* ((record (agentedit-review--parse-record macro (+ macro 10)))
+           (cursor (+ macro 10))
+           (arguments (list (agentedit-review-record-id record)
+                            (agentedit-review-record-reason record)
+                            (agentedit-review-record-original record)
+                            (agentedit-review-record-edited record))))
+      (unless (equal id (car arguments))
+        (agentedit-review--line-error banner "frame ID does not match macro ID"))
+      (dolist (argument arguments)
+        (goto-char cursor)
+        (unless (if (= cursor (+ macro 10))
+                    (looking-at "{")
+                  (looking-at "\r?\n[ \t]*{"))
+          (agentedit-review--line-error banner "each argument must start on a new line"))
+        (setq cursor (+ (match-end 0) (length argument) 1)))
       (goto-char cursor)
-      (let ((char (char-after)))
-        (cond
-         ((eq char ?%)
-          (setq cursor (min (point-max) (1+ (line-end-position)))))
-         ((not (eq char ?\\))
-          (setq cursor (1+ cursor)))
-         (t
-          (let ((word-end (agentedit-review--control-word-end cursor)))
-            (if (not word-end)
-                (setq cursor (min (point-max) (+ cursor 2)))
-              (let ((word (buffer-substring-no-properties (1+ cursor) word-end)))
-                (cond
-                 ((string= word "verb")
-                  (setq cursor (agentedit-review--verb-end word-end cursor)))
-                 ((string= word "begin")
-                  (let ((parsed (agentedit-review--parse-environment-name word-end)))
-                    (if (and parsed
-                             (member (car parsed)
-                                     agentedit-review-verbatim-environments))
-                        (setq cursor
-                              (agentedit-review--verbatim-end
-                               (car parsed) (cadr parsed) cursor))
-                      (setq cursor word-end))))
-                 ((string= word "agentedit")
-                  (if (< cursor origin)
-                      (let ((end (condition-case nil
-                                     (let ((scan word-end))
-                                       (dotimes (_ 4)
-                                         (setq scan
-                                               (cadr
-                                                (agentedit-review--parse-braced-at
-                                                 scan cursor))))
-                                       scan)
-                                   (user-error word-end))))
-                        (setq cursor end))
-                    (let* ((record (agentedit-review--parse-record cursor word-end))
-                           (id (agentedit-review-record-id record)))
-                      (when (gethash id ids)
-                        (agentedit-review--line-error
-                         cursor "duplicate marker ID %s" id))
-                      (puthash id t ids)
-                      (push record records)
-                      (setq cursor (marker-position
-                                    (agentedit-review-record-end record))))))
-                 (t (setq cursor word-end))))))))))
+      (unless (looking-at
+               (concat "\\([ \t\r\n]*\\)%\r?\n%%% AGENTEDIT END: "
+                       (regexp-quote id) " %%%\r?\n"))
+        (agentedit-review--line-error banner "missing right separator, matching END, or END newline"))
+      (let ((whitespace (match-string-no-properties 1)) (end (match-end 0)))
+        (when (or (string-match-p "\r" (replace-regexp-in-string "\r\n" "" whitespace))
+                  (memq (char-after end) '(?\s ?\t ?\r ?\n)))
+          (agentedit-review--line-error banner "retain ordinary right whitespace before the separator"))
+        (set-marker (agentedit-review-record-start record) separator)
+        (set-marker (agentedit-review-record-end record) end)
+        (setf (agentedit-review-record-framed record) t
+              (agentedit-review-record-whitespace record) whitespace
+              (agentedit-review-record-snapshot record)
+              (buffer-substring-no-properties separator end)
+              (agentedit-review-record-left-context record)
+              (agentedit-review--left-context separator)
+              (agentedit-review-record-right-context record)
+              (agentedit-review--right-context end))
+        record))))
+
+(defun agentedit-review--scan-records (origin)
+  "Return records at ORIGIN or later, including a frame containing ORIGIN.
+Legacy calls retain their control-word origin semantics."
+  (let ((records nil) (ids (make-hash-table :test #'equal))
+        (cursor (point-min)) separator)
+    (cl-labels
+        ((collect (record)
+           (let ((id (agentedit-review-record-id record)))
+             (when (gethash id ids)
+               (agentedit-review--line-error cursor "duplicate marker ID %s" id))
+             (puthash id t ids)
+             (push record records))))
+      (while (< cursor (point-max))
+        (goto-char cursor)
+        (pcase (char-after)
+          (?%
+           (let ((line-start (line-beginning-position)))
+             (if (and (string-match-p "\\`[ \t]*\\'"
+                                      (buffer-substring-no-properties line-start cursor))
+                      (save-excursion (goto-char line-start)
+                                      (looking-at agentedit-review--banner-regexp)))
+                 (let ((record (agentedit-review--parse-frame line-start separator)))
+                   (setq cursor (marker-position (agentedit-review-record-end record))
+                         separator nil)
+                   (when (> cursor origin) (collect record)))
+               (setq separator (when (looking-at "%\r?\n") cursor)
+                     cursor (min (point-max) (1+ (line-end-position)))))))
+          (?\\
+           (let ((word-end (agentedit-review--control-word-end cursor)))
+             (if (not word-end)
+                 (setq cursor (min (point-max) (+ cursor 2)))
+               (let ((word (buffer-substring-no-properties (1+ cursor) word-end)))
+                 (cond
+                  ((string= word "verb")
+                   (setq cursor (agentedit-review--verb-end word-end cursor)))
+                  ((string= word "begin")
+                   (let ((parsed (agentedit-review--parse-environment-name word-end)))
+                     (setq cursor
+                           (if (and parsed (member (car parsed) agentedit-review-verbatim-environments))
+                               (agentedit-review--verbatim-end (car parsed) (cadr parsed) cursor)
+                             word-end))))
+                  ((string= word "agentedit")
+                   (if (< cursor origin)
+                       (setq cursor
+                             (condition-case nil
+                                 (let ((scan word-end))
+                                   (dotimes (_ 4)
+                                     (setq scan (cadr (agentedit-review--parse-braced-at scan cursor))))
+                                   scan)
+                               (user-error word-end)))
+                     (let ((record (agentedit-review--parse-record cursor word-end)))
+                       (collect record)
+                       (setq cursor (marker-position (agentedit-review-record-end record))))))
+                  (t (setq cursor word-end)))))))
+          (_ (setq cursor (1+ cursor))))))
     (nreverse records)))
 
 (defun agentedit-review--normalize-one-line (text)
@@ -518,6 +592,11 @@ MARKER-POSITION is used for located errors."
       (setq-local agentedit-review--session session)
       (setq-local agentedit-review--projection-role side)
       (agentedit-review--install-projection-visuals side)
+      (when (string-match-p "\\`[ \t\r\n]*\\'" text)
+        (setq-local header-line-format
+                    (append header-line-format
+                            (list (if (string-empty-p text) " · empty"
+                                    (format " · whitespace only (%d characters)" (length text)))))))
       (add-hook 'kill-buffer-hook #'agentedit-review--projection-killed nil t))
     buffer))
 
@@ -575,26 +654,21 @@ MARKER-POSITION is used for located errors."
       agentedit-review--header-location)))
 
 (defun agentedit-review--mode-line-format ()
-  "Compose the width-bounded AgentEdit control-buffer mode line."
+  "Keep decision keys and unsaved status ahead of counts at narrow widths."
   (let* ((session agentedit-review--session)
-         (controls " A accept  R reject  S skip  q quit ")
+         (width (max 20 (window-body-width)))
+         (controls (if (< width 60) " A accept R reject S skip q quit" " A accept  R reject  S skip  q quit "))
          (counts (concat "  " (agentedit-review--counts session)))
-         (status (concat "  " (agentedit-review--unsaved-label session)))
-         (width (max 20 (window-body-width))))
-    (setq agentedit-review--mode-controls
-          (propertize controls 'face 'mode-line-emphasis)
-          agentedit-review--mode-counts
-          (if (>= width (+ (string-width controls) (string-width counts)))
-              counts
-            "")
+         (label (agentedit-review--unsaved-label session))
+         (status (concat " " (if (< width 60) (car (last (split-string label))) label))))
+    (setq agentedit-review--mode-controls (propertize controls 'face 'mode-line-emphasis)
           agentedit-review--mode-status
-          (if (>= width (+ (string-width controls) (string-width counts)
-                            (string-width status)))
-              (propertize status 'face 'shadow)
-            ""))
-    '(agentedit-review--mode-controls
-      agentedit-review--mode-counts
-      agentedit-review--mode-status)))
+          (if (<= (+ (string-width controls) (string-width status)) width)
+              (propertize status 'face 'shadow) "")
+          agentedit-review--mode-counts
+          (if (<= (+ (string-width controls) (string-width status) (string-width counts)) width)
+              counts ""))
+    '(agentedit-review--mode-controls agentedit-review--mode-status agentedit-review--mode-counts)))
 
 (defun agentedit-review--install-control (session record)
   "Install SESSION controls and RECORD presentation in the current buffer."
@@ -890,27 +964,91 @@ MARKER-POSITION is used for located errors."
       (when (eq buffer-undo-list t)
         (error "undo became disabled")))))
 
+(defun agentedit-review--validate-frame-context (record)
+  "Refuse a stale RECORD and re-establish lexical visibility from buffer start."
+  (let ((start (marker-position (agentedit-review-record-start record)))
+        (end (marker-position (agentedit-review-record-end record))))
+    (unless (and (equal (agentedit-review--left-context start)
+                        (agentedit-review-record-left-context record))
+                 (equal (agentedit-review--right-context end)
+                        (agentedit-review-record-right-context record))
+                 (condition-case nil
+                     (cl-find-if
+                      (lambda (fresh)
+                        (and (agentedit-review-record-framed fresh)
+                             (= start (marker-position (agentedit-review-record-start fresh)))
+                             (= end (marker-position (agentedit-review-record-end fresh)))))
+                      (save-excursion (agentedit-review--scan-records (point-min))))
+                   (user-error nil)))
+      (signal 'agentedit-review-stale nil))))
+
+(defun agentedit-review--context-updates (session start end replacement)
+  "Derive queued witnesses from the known splice START END REPLACEMENT.
+Validate old witnesses before rebasing; never adopt arbitrary live context."
+  (let* ((source (current-buffer))
+         (before (buffer-substring-no-properties (point-min) (point-max)))
+         (after (concat (substring before 0 (1- start)) replacement
+                        (substring before (1- end))))
+         (delta (- (length replacement) (- end start)))
+         candidates updates)
+    (dolist (record (nthcdr (1+ (agentedit-review-session-index session))
+                            (agentedit-review-session-records session)))
+      (when (and (agentedit-review-record-framed record)
+                 (eq source (agentedit-review--record-source record)))
+        (let ((left (marker-position (agentedit-review-record-start record)))
+              (right (marker-position (agentedit-review-record-end record))))
+          (push (list record left right (agentedit-review--left-context left)
+                      (agentedit-review--right-context right)) candidates))))
+    ;; Materialize the expected source once for all remaining records.
+    (with-temp-buffer
+      (insert after)
+      (dolist (candidate candidates)
+        (pcase-let* ((`(,record ,left ,right ,old-left ,old-right) candidate)
+                     (new-context
+                      (list (agentedit-review--left-context (+ left delta))
+                            (agentedit-review--right-context (+ right delta)))))
+          (unless (equal (list old-left old-right) new-context)
+            (unless (and (equal old-left (agentedit-review-record-left-context record))
+                         (equal old-right (agentedit-review-record-right-context record)))
+              (signal 'agentedit-review-stale nil))
+            (push (cons record new-context) updates)))))
+    updates))
+
+;; Own: P | % EOL START EOL macro(old,new) W % EOL END EOL | S
+;; Keep: P | chosen W                                       | S
 (defun agentedit-review--replace-current (session replacement)
-  "Replace SESSION's current wrapper with REPLACEMENT atomically."
+  "Replace SESSION's current owned frame with REPLACEMENT and retained whitespace."
   (let* ((record (agentedit-review--current-record session))
          (start (agentedit-review-record-start record))
          (end (agentedit-review-record-end record))
          (source (agentedit-review--record-source record)))
     (agentedit-review--source-ready record)
     (unless (and (marker-position start) (marker-position end)
-                 (eq (marker-buffer start) source)
-                 (eq (marker-buffer end) source))
+                 (eq (marker-buffer start) source) (eq (marker-buffer end) source))
       (error "marker position is no longer live"))
     (with-current-buffer source
       (unless (string= (buffer-substring-no-properties start end)
                        (agentedit-review-record-snapshot record))
         (signal 'agentedit-review-stale nil))
-      (undo-boundary)
-      (atomic-change-group
-        (delete-region start end)
-        (goto-char start)
-        (insert replacement))
-      (undo-boundary))))
+      (when (agentedit-review-record-framed record)
+        (agentedit-review--validate-frame-context record))
+      (let* ((text (concat replacement (agentedit-review-record-whitespace record)))
+             (updates (agentedit-review--context-updates session start end text)))
+        (undo-boundary)
+        (atomic-change-group
+          (delete-region start end)
+          (goto-char start)
+          (insert text)
+          (dolist (update updates)
+            (let ((queued (car update)))
+              (unless (equal (cdr update)
+                             (list (agentedit-review--left-context (agentedit-review-record-start queued))
+                                   (agentedit-review--right-context (agentedit-review-record-end queued))))
+                (signal 'agentedit-review-stale nil)))))
+        (dolist (update updates)
+          (setf (agentedit-review-record-left-context (car update)) (cadr update)
+                (agentedit-review-record-right-context (car update)) (caddr update)))
+        (undo-boundary)))))
 
 (define-error 'agentedit-review-stale "AgentEdit source snapshot is stale")
 
@@ -918,7 +1056,7 @@ MARKER-POSITION is used for located errors."
   "Return the combined ACTION and next-record announcement for SESSION.
 RECORD is the record whose decision just completed."
   (let ((next (agentedit-review--current-record session)))
-    (format "%s %s · Next %d / %d %s · Reason: %s · A accept, R reject, S skip, q quit"
+    (format "%s %s · Next %d / %d %s · Source: %s:%d · Reason: %s · A accept, R reject, S skip, q quit"
             action
             (agentedit-review--normalize-one-line
              (agentedit-review-record-id record))
@@ -926,6 +1064,8 @@ RECORD is the record whose decision just completed."
             (length (agentedit-review-session-records session))
             (agentedit-review--normalize-one-line
              (agentedit-review-record-id next))
+            (agentedit-review--source-label (agentedit-review--record-source next))
+            (agentedit-review--record-line next)
             (agentedit-review--normalize-one-line
              (agentedit-review-record-reason next)))))
 
@@ -1085,15 +1225,15 @@ document compilation context."
         buffers)
     (cl-labels
         ((visit
-          (file)
-          (let ((canonical (file-truename file)))
-            (unless (gethash canonical seen)
-              (puthash canonical t seen)
-              (let ((buffer (find-file-noselect canonical)))
-                (push buffer buffers)
-                (dolist (input (agentedit-review--auctex-inputs
-                                buffer master-directory))
-                  (visit input)))))))
+           (file)
+           (let ((canonical (file-truename file)))
+             (unless (gethash canonical seen)
+               (puthash canonical t seen)
+               (let ((buffer (find-file-noselect canonical)))
+                 (push buffer buffers)
+                 (dolist (input (agentedit-review--auctex-inputs
+                                 buffer master-directory))
+                   (visit input)))))))
       (visit master-file))
     (nreverse buffers)))
 
