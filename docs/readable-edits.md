@@ -108,13 +108,16 @@ rename it. Older reviewers only know the macro extent and cannot clean up a
 readable frame. Do not downgrade while frames remain.
 
 The guard supports whole-file Write, unique exact Edit aliases, sequential
-MultiEdit, and LF Add/Update File patches. Every changed range must submit a
+MultiEdit, and LF Add/Update File patches. Update hunks must match unique exact
+whole-line context and appear in source order. Every changed range must submit a
 complete frame. For revisions, include the existing left separator through END's
 newline and preserve the ID, original, and retained whitespace. Use unchanged
 context outside the payloads to disambiguate an exact match. Missing/ambiguous
-anchors, named `@@` anchors, unprefixed blank context, repeated file headers, `replace_all`, patch moves, EOF directives, files without a final newline, and patches against CRLF
-files require an exact Edit or a whole-file Write. Retrying must never widen the
-original payload to a paragraph merely to provide tool context.
+anchors, named `@@` anchors, unprefixed blank context, repeated file headers,
+`replace_all`, patch moves, EOF directives, files without a final newline, and
+patches against CRLF files require an exact Edit or a whole-file Write. Retrying
+must never widen the original payload to a paragraph merely to provide tool
+context.
 
 LF and CRLF sources retain their original decoded text. Exact Edit/Write must
 preserve CRLF; Emacs preserves the visited file's coding system. Mixed line

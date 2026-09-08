@@ -12,8 +12,8 @@ Use this workflow for every `.tex` or `.bib` edit in a protected project.
 
 ## Bootstrap A New Project
 
-Read `../../BOOTSTRAP.md` from the plugin root for the canonical, self-contained
-bootstrap contract, then apply the workflow below to the target repository.
+Read [the bootstrap contract](../../BOOTSTRAP.md), relative to this skill
+directory, then apply the workflow below to the target repository.
 
 Complete bootstrap before making paper-facing edits:
 
@@ -24,9 +24,11 @@ Complete bootstrap before making paper-facing edits:
 3. Copy `latex/agentedit.sty` to the paper project root. Keep it as a regular
    file, not a symlink or Git submodule, so the project remains portable to
    Overleaf.
-4. In the entry-point preamble, add an `AGENTEDIT-BOOTSTRAP` comment, define any
-   project-specific `\AgentEditRender`, and load `\usepackage{agentedit}`. The
-   package default renders the edited source if no renderer is supplied.
+4. In the entry-point preamble, add an `AGENTEDIT-BOOTSTRAP` comment, define the
+   project default `\AgentEditRender` with `\providecommand` before loading
+   `\usepackage{agentedit}`, and preserve any renderer already selected by an
+   original-view wrapper. The package default renders the edited source if no
+   renderer is supplied.
 5. If the project uses TODO notes, make the renderer append a note containing
    `#2`, the reason, and `#1`, the stable edit ID. Keep `#4`, the edited source,
    as the normal paper rendering.
@@ -136,10 +138,13 @@ record. Converting a legacy record during revision preserves its original and
 safe ID; an unsafe ID needs a human decision.
 
 Use a unique exact `old_string`/`oldText` (including unchanged tool context outside
-payloads) or an LF patch containing each complete new frame. Sequential MultiEdit
-members use the previous member's resulting source. `replace_all`, ambiguous
-anchors, named `@@` anchors, unprefixed blank context, repeated file headers, patch moves, EOF directives, files without a final newline, and CRLF patches are unsupported: retry
-with an exact Edit or a whole-file Write preserving the original line endings.
+payloads) or an LF patch containing each complete new frame. Update hunks must
+match unique exact whole-line context and appear in source order. Sequential
+MultiEdit members use the previous member's resulting source. `replace_all`,
+ambiguous anchors, named `@@` anchors, unprefixed blank context, repeated file
+headers, patch moves, EOF directives, files without a final newline, and CRLF
+patches are unsupported: retry with an exact Edit or a whole-file Write preserving
+the original line endings.
 After denial, resend the complete frame including both separators and END's
 newline; do not enlarge the changed payload to supply tool context.
 

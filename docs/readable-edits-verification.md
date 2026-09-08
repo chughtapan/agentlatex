@@ -27,8 +27,11 @@ activate a paper's policy or claim that a released plugin is installed.
 - Independent completion and adversarial reviews found issues that were repaired
   with regressions. No known in-repository implementation items remain deferred.
 
-CI retains Emacs 29.4/30.2 with built-in modes and AUCTeX 14.1.0/14.1.2. The
-pull request's check results are the source of truth for that matrix.
+[CI run 34284771941](https://github.com/chughtapan/agentlatex/actions/runs/34284771941)
+passed all eight jobs for implementation commit `f508de9`, including the required
+LaTeX checks and Emacs 29.4/30.2 with built-in modes and AUCTeX 14.1.0/14.1.2.
+The pull request's current check results remain the source of truth after later
+changes.
 
 ## Release and activation evidence still needed
 

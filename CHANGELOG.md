@@ -4,8 +4,9 @@
 
 ### Added
 
-- Opt-in `blocks-v1` source framing with matching START/END banners and separate
-  original/proposed lines, preserving independent word and fragment edits.
+- Opt-in [`blocks-v1` source framing](docs/readable-edits.md) with matching
+  START/END banners and separate original/proposed lines, preserving independent
+  word and fragment edits.
 - Complete-frame Emacs accept/reject, exact whitespace retention, context and
   lexical stale checks, empty-pane labels, and one undo step per decision.
 - Shared Python/Emacs fixtures and TeX layout and real entry-point regressions.
