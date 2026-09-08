@@ -2,6 +2,27 @@
 
 Overleaf can use AgentEdit without installing a system package.
 
+## Review and exchange source
+
+Use the [readable block legend and manual decision recipe](../docs/readable-edits.md)
+to accept or reject a word-sized edit in the source editor. No Overleaf plugin is
+required. Keep both the original and proposal visible until a human decides.
+
+For each agent editing round:
+
+1. Export/download the latest editor project or sync its current source to the
+   agent's working copy using your existing Git workflow.
+2. Have the agent edit that copy with complete readable blocks.
+3. Before returning the changed files, check for concurrent editor changes.
+   Merge or reconcile those changes; do not overwrite a newer editor copy.
+4. Review in the source editor or Emacs and save the human decisions.
+5. Return that reviewed source to the agent's working copy **before the next
+   editing request**, so accepted or rejected records are not resurrected.
+
+Only enable `blocks-v1` after the shared-project owner confirms that teammates
+have the current Emacs reviewer or know the manual recipe. A successful PDF
+preview does not verify the host hook or remove leftover frame comments.
+
 ## Project Files
 
 1. Copy `../latex/agentedit.sty` to the Overleaf project's top level.
@@ -27,9 +48,7 @@ The renderer is normal preamble LaTeX. This example keeps the edited source and
 uses an existing `\todo` command to display the reason:
 
 ```tex
-\long\def\AgentEditRender#1#2#3#4{%
-  #4\todo{AI [#1]: #2}%
-}
+\providecommand{\AgentEditRender}[4]{#4\todo{AI [#1]: #2}}
 ```
 
 Define the renderer before `\usepackage{agentedit}`. Adapt the TODO command and

@@ -23,7 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - run: sudo apt-get update && sudo apt-get install -y texlive-latex-base
+      - run: sudo apt-get update && sudo apt-get install -y texlive-latex-base poppler-utils
+      - name: Require source and entry-point rendering checks
+        env:
+          AGENTEDIT_REQUIRE_TEX: "1"
+        run: python3 -m unittest discover -s tests -p test_readable_rendering.py -v
       - working-directory: examples
         run: |
           TEXINPUTS=../latex: pdflatex -interaction=nonstopmode -halt-on-error example.tex
