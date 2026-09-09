@@ -19,6 +19,9 @@
   partial frames, ambiguous anchors, invalid policies, and changed originals.
 - Preserve a selected original-preview renderer in bootstrap defaults.
 - Keep legacy macro review and policy behavior when the format key is absent.
+- Resolve Codex's packaged hook explicitly from the installed plugin root;
+  verify native dispatch and the live Codex-to-Emacs-to-PDF workflow.
+- Clarify that patch revisions must remove and re-add complete frame lines.
 
 
 ## 0.3.0 - 2026-08-26

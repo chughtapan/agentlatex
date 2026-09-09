@@ -84,3 +84,31 @@ residual frames, and whitespace loss during the first review and again after a
 week of use; any integrity failure requires repair before broader activation.
 
 See the [implementation evidence and pending activation checks](docs/readable-edits-verification.md).
+
+## Native end-to-end smoke test
+
+Install the current plugin into Codex, reload, and review/trust its hooks. The
+test needs Codex login, Emacs, `pdflatex`, and `pdftotext`:
+
+```sh
+codex plugin marketplace add .
+codex plugin add agentedit-guard@agentlatex
+python3 tests/run_native_e2e.py --model gpt-6-astra
+```
+
+When updating an already installed plugin, refresh its installed copy before
+running. Automation that has vetted every enabled hook can pass `--trust-hooks`
+to grant hook trust for each test invocation. This does not bypass hook denials.
+
+The harness makes live model calls and retains a disposable project under the
+printed temporary path. It verifies native dispatch with observational pre/post
+hooks, checks all eight editing cases with LF-terminated source, deliberately
+submits an unmarked edit and a partial revision, retries a complete frame, drives
+the actual Ediff A/R bindings, checks unsaved disk bytes and undo, explicitly
+saves, compiles original/proposed/strict PDFs, and transfers the reviewed source
+back to the agent. Failures retain transcripts and source for inspection.
+
+This is an automated test of a prepared project. It does not measure fresh
+bootstrap, an owner's review experience, an old-instruction model baseline,
+Claude Code dispatch, or the Overleaf browser UI. The live harness is opt-in and
+does not run in normal CI. Inspect local transcripts before publishing them.

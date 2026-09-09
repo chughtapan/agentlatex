@@ -1,0 +1,187 @@
+{
+  "passed": true,
+  "model": "gpt-6-astra",
+  "scenarios": [
+    "addition",
+    "citation",
+    "deletion",
+    "fragment",
+    "pair",
+    "paragraph",
+    "revision",
+    "word"
+  ],
+  "host": "codex-cli 0.153.4",
+  "seconds": 186.7,
+  "checks": [
+    "unmarked denial",
+    "eight precise generated edits",
+    "partial denial",
+    "complete revision",
+    "original/proposed PDFs",
+    "strict rejection",
+    "real Ediff A/R",
+    "no implicit save",
+    "exact undo",
+    "explicit save",
+    "resolved strict PDF",
+    "source transfer"
+  ],
+  "generation_patch_attempts": 1,
+  "generation_patch_completions": 1,
+  "date": "2026-09-08 America/Los_Angeles",
+  "scope": "Automated prepared-project smoke; LF-terminated cases; one live batch, not a statistical model benchmark.",
+  "files_sha256": {
+    "plugins/agentedit-guard/.codex-plugin/plugin.json": "2f53bfe7e907e32ba34603b62640faba403df2c0655a6bf53096e1aaa96403c8",
+    "plugins/agentedit-guard/hooks.json": "5ddd93d416250fd0836d50bcf63d710498318124cd797cf6ebe920f7b00fccd4",
+    "plugins/agentedit-guard/scripts/guard_agent_edits.py": "d83fa6f349cb397d0b11d6a74f9656b58c8a82e6a5a7d0e1fad86f620f93f336",
+    "plugins/agentedit-guard/skills/agentedit-guard/SKILL.md": "4f1e243be8578a6a816006a870645281031fda8d9f82c9a2334ee6e633bbb4c3",
+    "emacs/agentedit-review.el": "db2abcfcf8a550167d293931869683c1954269c44bdebc22ddc9c3e05229fde7",
+    "tests/run_native_e2e.py": "3cea4f847c733dad1a968608b8d7f70897597e31ff8c07eef9abd4b9cf2148f3",
+    "tests/e2e_review.el": "efeee61345e7191bdea7a433b43fd464533610741b6e5ef24be2a02e05e2272f"
+  },
+  "native_events": {
+    "denied-unmarked": {
+      "PreToolUse": 1,
+      "PostToolUse": 0,
+      "models": [
+        "gpt-6-astra"
+      ],
+      "attempted_patch": "*** Begin Patch\n*** Update File: word.tex\n@@\n-The system always terminates.\n+The system usually terminates.\n*** End Patch",
+      "host_error": "Command blocked by PreToolUse hook: Member 1: Blocked edit to word.tex: submit a complete frame for every changed range; partial or compact records cannot be submitted"
+    },
+    "generate": {
+      "PreToolUse": 1,
+      "PostToolUse": 1,
+      "models": [
+        "gpt-6-astra"
+      ]
+    },
+    "denied-partial": {
+      "PreToolUse": 1,
+      "PostToolUse": 0,
+      "models": [
+        "gpt-6-astra"
+      ],
+      "attempted_patch": "*** Begin Patch\n*** Update File: pair.tex\n@@\n-  {usually} %\n+  {often} %\n*** End Patch",
+      "host_error": "Command blocked by PreToolUse hook: Member 1: Blocked edit to pair.tex: submit a complete frame for every changed range; partial or compact records cannot be submitted"
+    },
+    "retry-full": {
+      "PreToolUse": 1,
+      "PostToolUse": 1,
+      "models": [
+        "gpt-6-astra"
+      ]
+    },
+    "handoff": {
+      "PreToolUse": 1,
+      "PostToolUse": 1,
+      "models": [
+        "gpt-6-astra"
+      ]
+    }
+  },
+  "generated_cases": [
+    {
+      "case": "addition",
+      "initial": "A .\n",
+      "requested_payload_pairs": [
+        [
+          "",
+          "new"
+        ]
+      ],
+      "source": "A %\n%%% AGENTEDIT START: addition %%%\n\\agentedit{addition}\n  {Insert requested text.}\n  {}\n  {new}%\n%%% AGENTEDIT END: addition %%%\n.\n"
+    },
+    {
+      "case": "citation",
+      "initial": "See \\cite[page 2]{reference}.\n",
+      "requested_payload_pairs": [
+        [
+          "2",
+          "3"
+        ]
+      ],
+      "source": "See \\cite[page %\n%%% AGENTEDIT START: citation %%%\n\\agentedit{citation}\n  {Update page number.}\n  {2}\n  {3}%\n%%% AGENTEDIT END: citation %%%\n]{reference}.\n"
+    },
+    {
+      "case": "deletion",
+      "initial": "A word B\n",
+      "requested_payload_pairs": [
+        [
+          "word ",
+          ""
+        ]
+      ],
+      "source": "A %\n%%% AGENTEDIT START: deletion %%%\n\\agentedit{deletion}\n  {Remove requested word.}\n  {word }\n  {}%\n%%% AGENTEDIT END: deletion %%%\nB\n"
+    },
+    {
+      "case": "fragment",
+      "initial": "international\n",
+      "requested_payload_pairs": [
+        [
+          "nation",
+          "region"
+        ]
+      ],
+      "source": "inter%\n%%% AGENTEDIT START: fragment %%%\n\\agentedit{fragment}\n  {Replace requested fragment.}\n  {nation}\n  {region}%\n%%% AGENTEDIT END: fragment %%%\nal\n"
+    },
+    {
+      "case": "pair",
+      "initial": "The system always terminates quickly.\n",
+      "requested_payload_pairs": [
+        [
+          "always",
+          "usually"
+        ],
+        [
+          "quickly",
+          "promptly"
+        ]
+      ],
+      "source": "The system %\n%%% AGENTEDIT START: pair-frequency %%%\n\\agentedit{pair-frequency}\n  {Qualify frequency.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: pair-frequency %%%\nterminates %\n%%% AGENTEDIT START: pair-speed %%%\n\\agentedit{pair-speed}\n  {Revise timing wording.}\n  {quickly}\n  {promptly}%\n%%% AGENTEDIT END: pair-speed %%%\n.\n"
+    },
+    {
+      "case": "paragraph",
+      "initial": "A\n\nB\n",
+      "requested_payload_pairs": [
+        [
+          "\n\n",
+          "\nword\n"
+        ]
+      ],
+      "source": "A%\n%%% AGENTEDIT START: paragraph %%%\n\\agentedit{paragraph}\n  {Insert requested line.}\n  {\n\n}\n  {\nword\n}%\n%%% AGENTEDIT END: paragraph %%%\nB\n"
+    },
+    {
+      "case": "revision",
+      "initial": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.\n",
+      "requested_payload_pairs": [
+        [
+          "always",
+          "often"
+        ]
+      ],
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Revise frequency.}\n  {always}\n  {often} %\n%%% AGENTEDIT END: word %%%\nterminates.\n"
+    },
+    {
+      "case": "word",
+      "initial": "The system always terminates.\n",
+      "requested_payload_pairs": [
+        [
+          "always",
+          "usually"
+        ]
+      ],
+      "source": "The system %\n%%% AGENTEDIT START: word-frequency %%%\n\\agentedit{word-frequency}\n  {Qualify frequency.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word-frequency %%%\nterminates.\n"
+    }
+  ],
+  "review_input": "The system %\n%%% AGENTEDIT START: pair-frequency %%%\n\\agentedit{pair-frequency}\n  {Qualify frequency.}\n  {always}\n  {often} %\n%%% AGENTEDIT END: pair-frequency %%%\nterminates %\n%%% AGENTEDIT START: pair-speed %%%\n\\agentedit{pair-speed}\n  {Revise timing wording.}\n  {quickly}\n  {promptly}%\n%%% AGENTEDIT END: pair-speed %%%\n.\n",
+  "saved_review_source": "The system often terminates quickly.\n",
+  "handoff_source": "The system often terminates %\n%%% AGENTEDIT START: promptly %%%\n\\agentedit{promptly}\n  {Use the requested wording.}\n  {quickly}\n  {promptly}%\n%%% AGENTEDIT END: promptly %%%\n.\n",
+  "pdf_text": {
+    "original": "The system always terminates quickly. 1",
+    "proposed": "The system often terminates promptly. 1",
+    "resolved-strict": "The system often terminates quickly. 1"
+  },
+  "emacs_receipt": "E2E Ediff: accept, reject, unsaved disk, exact undo, repeat, explicit save PASS"
+}

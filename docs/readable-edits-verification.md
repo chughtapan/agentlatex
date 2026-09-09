@@ -5,7 +5,7 @@ activate a paper's policy or claim that a released plugin is installed.
 
 ## Local evidence, 2026-09-08
 
-- 70 Python tests pass with TeX dependencies required. The suite includes the
+- 71 Python tests pass with TeX dependencies required. The suite includes the
   eight-scenario evaluator's precision, provenance, and placement regressions.
 - 80 ERT tests pass with Emacs 30.1 and AUCTeX 14.1.2. Built-in TeX mode passes
   74 tests and explicitly skips the six AUCTeX-specific tests. Both interpreted
@@ -33,15 +33,56 @@ LaTeX checks and Emacs 29.4/30.2 with built-in modes and AUCTeX 14.1.0/14.1.2.
 The pull request's current check results remain the source of truth after later
 changes.
 
+## Native end-to-end evidence, 2026-09-08
+
+The [captured smoke-test receipt](evidence/codex-native-e2e-2026-09-08.json)
+records Codex CLI 0.153.4 with `gpt-6-astra`, the tested file hashes, native
+pre/post events, generated source, review results, and PDF text. The complete
+prepared-project run passed in 186.7 seconds. This is automated elapsed time,
+not an owner's setup-to-first-decision measurement.
+
+- Installed the packaged plugin, restarted native sessions, and observed real
+  `apply_patch` dispatch. An unmarked write and a partial proposal revision each
+  produced one pre-hook event, no post-hook event, a native AgentEdit denial,
+  and unchanged disk bytes. A complete-frame retry succeeded.
+- Generated all eight cases as nine precise records in one successful patch
+  request, with no format retry in the final run. The cases use LF-terminated
+  files for Codex's patch adapter. Exact payloads, accepted-source placement,
+  original reconstruction, and frozen revision provenance all passed.
+- Drove real Ediff A/R bindings against the generated pair. Accept/reject
+  preserved unsaved disk bytes, two undo steps restored the complete source,
+  and repeated review followed by explicit save produced the expected sentence.
+- Original and proposed PDFs contained the expected text. Strict compilation
+  rejected unresolved edits and passed after review. Transferring the saved
+  source back to Codex produced only the newly requested record.
+
+The first installed-plugin smoke exposed a Codex packaging defect: the manifest
+did not select its intended hook file, whose command also used a path relative
+to the paper directory. Explicit manifest routing and `PLUGIN_ROOT` command
+resolution fixed native interception. A command-execution regression now covers
+paper and installed-plugin paths containing spaces. Codex documents these
+[plugin hook loading rules](https://learn.chatgpt.com/docs/hooks#plugin-hooks).
+
+An earlier generated batch was denied once because a revised frame used
+unchanged patch context instead of replacement lines. Its complete-frame retry
+succeeded without widening payloads. The skill, repair message, and format guide
+now explain `-`/`+` frame replacement explicitly. These are individual smoke
+observations, not comparative model-quality rates.
+
+Run the [opt-in native harness](../CONTRIBUTING.md#native-end-to-end-smoke-test)
+to reproduce this path. Full local transcripts are retained separately; the
+checked-in receipt contains only the synthetic paper's relevant evidence.
+
 ## Release and activation evidence still needed
 
-- Native hook dispatch after reload for each supported host: create, revise,
-  observe an unchanged file after a denied partial write, and retry successfully.
+- Claude Code native hook dispatch after reload: create, revise, observe an
+  unchanged file after a denied partial write, and retry successfully. The local
+  Claude CLI is installed but logged out; its live test requires authentication.
 - Disposable fresh/shared/interrupted/repeated setup, old-reader recovery,
   source-editor handoff, and complete opt-out while retaining unrelated setup.
-- Live host/model outputs compared with older instructions, including actual
-  first-attempt format rates and retry counts. The deterministic evaluator is
-  ready; reference-output tests are not live-model measurements.
+- A live comparison with older instructions, including first-attempt format
+  rates and retry counts. The new-instruction smoke above does not establish
+  comparative results or reliability across hosts/models.
 - An owner review walkthrough and measured prepared setup-to-first-decision time.
 - The reporting user's readability validation and actual Overleaf review exercise.
 

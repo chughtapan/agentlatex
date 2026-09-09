@@ -65,7 +65,9 @@ CONTROL = re.compile(r"\\([A-Za-z]+)")
 FRAME_HEAD = re.compile(r"%%% AGENTEDIT START: (" + SAFE_ID + r") %%%(\r?\n)")
 REPAIR = (
     "Retry a smaller batch with complete blocks, including both % separators "
-    "and the newline after END. Preserve the ID, original, and right whitespace; "
+    "and the newline after END. In patches, remove and re-add every frame line "
+    "with -/+ prefixes; unchanged context lines do not submit the frame. "
+    "Preserve the ID, original, and right whitespace; "
     "keep only the changed word or fragment in the payloads. Example:\n"
     "%\n%%% AGENTEDIT START: edit-1 %%%\n"
     "\\agentedit{edit-1}\n  {Reason.}\n  {old}\n  {new}%\n"

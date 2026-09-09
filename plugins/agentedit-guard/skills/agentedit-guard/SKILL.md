@@ -147,6 +147,9 @@ patches are unsupported: retry with an exact Edit or a whole-file Write preservi
 the original line endings.
 After denial, resend the complete frame including both separators and END's
 newline; do not enlarge the changed payload to supply tool context.
+For a patch revision, remove and re-add every frame line with `-`/`+` prefixes,
+including unchanged banners and arguments. Space-prefixed context lines do not
+submit those parts of the frame. Keep the original/proposed payloads precise.
 
 Standalone optional indentation followed by `%%% AGENTEDIT` and a space, tab,
 colon, or line ending reserves the structural namespace. Damaged, indented,

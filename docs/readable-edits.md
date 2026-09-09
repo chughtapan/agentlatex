@@ -109,7 +109,10 @@ readable frame. Do not downgrade while frames remain.
 
 The guard supports whole-file Write, unique exact Edit aliases, sequential
 MultiEdit, and LF Add/Update File patches. Update hunks must match unique exact
-whole-line context and appear in source order. Every changed range must submit a
+whole-line context and appear in source order. For a patch revision, remove and
+re-add every frame line with `-`/`+` prefixes, including unchanged banners and
+arguments. Space-prefixed context lines do not submit those parts of the frame.
+Keep the original/proposed payloads precise. Every changed range must submit a
 complete frame. For revisions, include the existing left separator through END's
 newline and preserve the ID, original, and retained whitespace. Use unchanged
 context outside the payloads to disambiguate an exact match. Missing/ambiguous
