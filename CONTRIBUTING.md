@@ -83,8 +83,6 @@ Track first-attempt format failures, forced payload widening, wrong-side choices
 residual frames, and whitespace loss during the first review and again after a
 week of use; any integrity failure requires repair before broader activation.
 
-See the [implementation evidence and pending activation checks](docs/readable-edits-verification.md).
-
 ## Native end-to-end smoke test
 
 Install the current plugin into Codex, reload, and review/trust its hooks. The

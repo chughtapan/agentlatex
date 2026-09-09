@@ -93,7 +93,6 @@ a hook.
 - [Emacs and AUCTeX reviewer guide](emacs/README.md)
 - [Overleaf guide](overleaf/README.md)
 - [Contributor guide](CONTRIBUTING.md)
-- [Implementation evidence and pending activation checks](docs/readable-edits-verification.md)
 - [Release history](CHANGELOG.md)
 
 AgentLaTeX is experimental. Report problems through the
