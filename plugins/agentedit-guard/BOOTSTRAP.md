@@ -24,17 +24,19 @@ When bootstrap is complete:
 
 Determine the current agent host from the available runtime and tools. Do not
 ask the user to identify it when it is already evident. If AgentEdit Guard is
-already installed, use its `agentedit-guard` skill and continue to Step 1.
+already installed, inspect its capabilities before reusing it. Installation is
+not evidence that the loaded guard supports readable blocks or is active.
+Use its `agentedit-guard` skill and continue the local checks below.
 
 On command-line hosts, install the current release when it is missing:
 
 ```sh
 # Codex
-codex plugin marketplace add chughtapan/agentlatex --ref v0.3.0
+codex plugin marketplace add chughtapan/agentlatex --ref v0.4.0
 codex plugin add agentedit-guard --marketplace agentlatex
 
 # Claude Code
-claude plugin marketplace add chughtapan/agentlatex@v0.3.0
+claude plugin marketplace add chughtapan/agentlatex@v0.4.0
 claude plugin install agentedit-guard@agentlatex
 ```
 
@@ -48,6 +50,21 @@ Claude Desktop may require the user to open **Customize** → **Plugins** →
 AgentEdit Guard. Ask only for that approval, then resume this contract. Ordinary
 Claude Chat does not execute plugin hooks; it may configure the repository and
 follow the skill, but must report that edits are not hook-enforced.
+
+For readable edits, check the installed script's `--capabilities` output for
+`"tex_edit_format": "blocks-v1"`. If Emacs is available, install or update the
+reviewer in the user's personal configuration, then verify the **loaded**
+`agentedit-review-format-version` equals `"blocks-v1"` after restarting Emacs.
+Do not infer loaded capability from a newer file on disk. Without Emacs, use the
+source-editor recipe below; no Emacs installation is required.
+
+Verify host dispatch in a disposable protected project: use the host's actual
+file-edit tool to create a complete framed proposal, revise it while preserving
+ID/original/whitespace, submit a partial revision and observe denial, then retry
+with the complete frame. Check that denied writes did not execute. A direct
+Python call verifies the parser only; it does not prove that the host dispatches
+the hook. Repeat the native smoke after a required host reload. If native dispatch
+cannot be verified, report the limitation and leave blocks-v1 activation staged.
 
 Plugin installation changes agent configuration, not the manuscript. Continue
 bootstrap without changing paper prose or bibliography data.
@@ -63,6 +80,9 @@ scripts, and bibliography configuration. Determine:
 - How local and Overleaf builds select the entry point.
 - Whether any current working-tree changes belong to the user.
 - Whether AgentLaTeX is already partly or fully configured.
+- Whether this is a new standalone project or an existing shared project, and
+  which teammates may still have an older reviewer. Do not infer their readiness
+  from the current user's successful local upgrade.
 
 Do not overwrite user changes or introduce a second TODO package unnecessarily.
 Treat setup as idempotent: preserve a compatible existing installation, repair
@@ -85,7 +105,7 @@ from `skills/agentedit-guard/SKILL.md`; the style file is at
 For an agent without the installed plugin, retrieve the file from:
 
 ```text
-https://raw.githubusercontent.com/chughtapan/agentlatex/v0.3.0/latex/agentedit.sty
+https://raw.githubusercontent.com/chughtapan/agentlatex/v0.4.0/latex/agentedit.sty
 ```
 
 Commit the copied file to the paper repository. Do not use a symlink or Git
@@ -98,15 +118,15 @@ to the project instead of copying this example blindly:
 
 ```tex
 % AGENTEDIT-BOOTSTRAP: AgentLaTeX package and project renderer.
+\providecommand{\AgentEditRender}[4]{#4\todo{AI [#1]: #2}}
 \usepackage{agentedit}
-
-\long\def\AgentEditRender#1#2#3#4{%
-  #4\todo{AI [#1]: #2}%
-}
 ```
 
-If the renderer is defined before the package load, use `\def`; the package will
-preserve it. If it is defined after the package load, `\renewcommand` also works.
+Define the default with `\providecommand` **before** the package load. This
+preserves a renderer already selected by the original-view entry point. Do not
+unconditionally redefine it in the main preamble after the wrapper selects it.
+Preserve compatible project customizations; apply the same conditional default
+pattern when adapting an existing TODO renderer.
 The project default should render `#4`, the edited source, and show `#2`, the
 reason. The stable ID is `#1`, and the retained original is `#3`.
 
@@ -153,12 +173,19 @@ The mode file contains:
 
 Update `AGENTS.md` with these non-negotiable rules:
 
-- Every substantive `.tex` change uses
-  `\agentedit{stable-id}{reason}{original}{edited}`.
+- Every substantive `.tex` change uses a complete `blocks-v1` frame after that
+  policy is activated; retain the four macro arguments ID/reason/original/proposal.
+- Keep the minimal valid changed span, including word fragments. Two changes in
+  one paragraph stay independent. Formatting must not widen payloads to paragraphs.
+- Freeze original, ID, and right whitespace across proposal revisions. Tool
+  context belongs outside payloads. Re-submit complete frames after denial.
+- Preserve both synthetic separators, END's final newline, and raw interiors.
+  Include a complete affected paragraph separator in the changed span when needed
+  for both views; do not add decorative blank lines or comment labels between args.
 - Additions have an empty original argument; deletions have an empty edited
   argument.
 - Agents never modify the retained original or remove a wrapper.
-- Only a human accepts an edit by removing its wrapper.
+- Only a human accepts or rejects an edit by removing its complete frame.
 - Every agent-added citation comes from DBLP and remains marked `UNVERIFIED`
   until a human checks it.
 - Every `.bib` change retains the commented old entry, active new entry, stable
@@ -170,6 +197,44 @@ Update `AGENTS.md` with these non-negotiable rules:
 Preserve any stronger project-specific writing and citation rules already in
 the file.
 
+### Readable TeX example and ownership
+
+Original: `The system always terminates.`
+
+```tex
+The system %
+%%% AGENTEDIT START: word %%%
+\agentedit{word}
+  {Review this precise change.}
+  {always}
+  {usually} %
+%%% AGENTEDIT END: word %%%
+terminates.
+```
+
+IDs use `[A-Za-z0-9][A-Za-z0-9._:-]*`. Both banners must match the macro ID.
+START, the macro/ID, reason, original, and proposal each begin on their own lines.
+Wrapper indentation uses spaces or tabs. Preserve interiors exactly. Place all
+original whitespace immediately following the changed span after the proposal's
+closing brace and before the right `%`; the source after END begins with a
+non-whitespace character or EOF. Both separator `%` characters and the newline
+after END are mandatory, even at beginning/end of file. Do not place a separator
+inside an existing comment or after an escaping backslash.
+
+For manual review, the human selects from the left separator `%` through the
+newline after END, and replaces it with the chosen argument's contents followed
+by the whitespace before the right separator. Accept yields
+`The system usually terminates.`; reject yields `The system always terminates.`.
+Defer leaves the whole frame untouched. Only removing the macro leaves orphan
+framing. Strict compilation detects macros, not orphan comments.
+
+For a fragment of `international`, wrap only `nation` → `region`, between `inter`
+and `al`, with no right whitespace. For inserting a line into `A` followed by a
+blank line then `B`, replace the full two-newline separator with newline + new
+line text + newline. An empty insertion splitting those two newlines changes the
+original-view paragraph structure. Never include unchanged paragraph prose just
+for layout. If a span cannot preserve valid arguments and both views, report it.
+
 ## Step 6: Enable The Guard
 
 Add `.agentedit.json` after the package, renderer, and review entry points are in
@@ -178,6 +243,7 @@ place. List actual paths, not assumed names:
 ```json
 {
   "version": 1,
+  "tex_edit_format": "blocks-v1",
   "bootstrap_marker": "AGENTEDIT-BOOTSTRAP",
   "bootstrap_files": [
     "main.tex",
@@ -188,6 +254,19 @@ place. List actual paths, not assumed names:
 ```
 
 Never add section files or bibliography files to `bootstrap_files`.
+
+For a new standalone project, activate `blocks-v1` only after local reader/manual
+and native guard checks pass. For an existing shared project, finish the safe
+local upgrade, but leave the `tex_edit_format` key absent until the owner confirms
+that teammates have compatible reviewers or will follow the manual recipe.
+Record activation as staged, with the exact readiness check still needed. Never
+assume elapsed time or a local upgrade confirms teammate readiness.
+
+An absent key keeps legacy validation. Do not use null or an empty string as a
+staging value: present unsupported values and invalid JSON are configuration
+errors. Existing compact records remain readable and need no bulk migration.
+Do not downgrade with pending frames. An interrupted/repeated setup must preserve
+manuscript content, custom renderers, and the previous policy until checks pass.
 
 ## Step 7: Verify Both Modes
 
@@ -207,6 +286,16 @@ Verify the review build:
 - Displays the edited source and the reason TODO.
 - Logs `AGENT-EDIT-REPORT` with the unresolved count.
 
+Verify the actual original-view wrapper renders distinct OLD text, while the
+proposed wrapper renders distinct NEW text, with the selected TODO style. Do not
+substitute an isolated renderer test for these real entry points.
+
+Exercise one disposable word edit: accept/reject must restore the exact expected
+sentence, skip must keep the full block, and one undo must restore a decision.
+For an editor/agent transfer, return reviewed source to the agent working copy
+before requesting another edit; check concurrent editor changes before replacing
+files so resolved records are not resurrected.
+
 Delete disposable smoke files and their build artifacts after verification.
 
 ## Step 8: Report The Bootstrap
@@ -216,10 +305,22 @@ Tell the user:
 - Which files were added or changed.
 - Which renderer and TODO-note command were selected.
 - The strict-build result and review-build result.
-- Whether the guard plugin is installed and active.
+- The installed guard, active hook, and loaded reviewer capabilities separately.
+- Whether blocks-v1 is active or staged, and which local/teammate/reload check
+  remains; no-Emacs users use the manual decision recipe.
+- The original/proposed entry-point and exact-source smoke results.
 - Any project-specific limitation, especially an Overleaf Main-document issue.
 
 Use the neutral label `AI` in newly created reason notes. Do not name the notes
 after the current agent host because another agent may edit the same paper.
 
 Do not claim the paper is clean merely because a warning-mode PDF exists.
+
+## Removing setup from one paper
+
+Keep a recoverable version. A human first resolves every pending edit with the
+current reviewer or manual recipe, and checks for leftover macros and banners.
+Then remove only this paper's AgentLaTeX package load/renderer, wrappers/mode
+file, policy file, and owned AGENTS section; preserve unrelated TODO/build
+configuration. Compile the ordinary paper without AgentLaTeX. Do not uninstall
+personal integrations that other papers still use.

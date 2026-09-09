@@ -1,6 +1,6 @@
 {
   "name": "agentedit-guard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Enforces AgentEdit provenance records for AI edits to LaTeX and BibTeX sources.",
   "author": {
     "name": "Tapan Chugh",
@@ -16,6 +16,7 @@
     "review"
   ],
   "skills": "./skills/",
+  "hooks": "./hooks.json",
   "interface": {
     "displayName": "AgentEdit Guard",
     "shortDescription": "Require reviewable provenance for LaTeX edits.",

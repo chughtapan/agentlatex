@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.0 - 2026-09-08
+
+### Added
+
+- Opt-in [`blocks-v1` source framing](docs/readable-edits.md) with matching
+  START/END banners and separate original/proposed lines, preserving independent
+  word and fragment edits.
+- Complete-frame Emacs accept/reject, exact whitespace retention, context and
+  lexical stale checks, empty-pane labels, and one undo step per decision.
+- Shared Python/Emacs fixtures and TeX layout and real entry-point regressions.
+- Source-editor review and transfer recipes, a disposable two-edit sample, and
+  staged activation for shared projects with older reviewers.
+
+### Changed
+
+- Validate blocks against actual file context and sequential batch results; deny
+  partial frames, ambiguous anchors, invalid policies, and changed originals.
+- Preserve a selected original-preview renderer in bootstrap defaults.
+- Keep legacy macro review and policy behavior when the format key is absent.
+- Resolve Codex's packaged hook explicitly from the installed plugin root;
+  verify native dispatch and the live Codex-to-Emacs-to-PDF workflow.
+- Clarify that patch revisions must remove and re-add complete frame lines.
+
+
 ## 0.3.0 - 2026-08-26
 
 ### Added

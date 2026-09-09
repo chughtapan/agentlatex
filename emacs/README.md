@@ -44,7 +44,10 @@ The command chooses its scope from the active TeX mode:
 - In a built-in TeX mode, it reviews the current file from point.
 - With `C-u`, it reviews the current file from point under either mode family.
 
-Each marker opens in a normal Ediff session. The original text appears in the
+Each marker opens in a normal Ediff session. Readable `blocks-v1` frames and legacy compact macros
+can coexist. Starting from inside a readable frame includes that edit. The
+frame's banners and separators stay out of the comparison; each pane contains
+only the raw payload. Empty and whitespace-only sides have explanatory headers. The original text appears in the
 red `− ORIGINAL` pane and the proposed text appears in the green `+ PROPOSED`
 pane. Changed characters receive stronger highlighting.
 
@@ -59,6 +62,21 @@ Use these keys in the Ediff control buffer:
 
 Normal Ediff navigation, help, scrolling, and the `|` layout toggle remain
 available.
+
+## Inspect sentence context
+
+Every announcement includes the full ID, reason, source path, and line. From the
+Ediff control buffer use `C-h e` to retrieve it, then `C-x b` to visit the named
+source and `M-x goto-line` to inspect the sentence. Return to the Ediff control
+buffer with `C-x b` to decide. Source locks remain held while you visit it.
+Controls and unsaved status take priority over counts in narrow windows.
+
+A readable frame requires the 0.4.0 reviewer. After updating the checkout,
+restart Emacs; `M-: agentedit-review-format-version` should return `"blocks-v1"`.
+Older reviewers leave banners behind. Stage shared policy activation until all
+reviewers are ready, or use the [manual recipe](../docs/readable-edits.md).
+Do not downgrade with unresolved frames. Finish or quit the session before
+undoing a decision, and restart after a stale-source refusal.
 
 ## Review an AUCTeX project
 
@@ -85,8 +103,9 @@ saves a source file, so inspect the result and save it with your normal Emacs
 workflow. `S` and `q` leave unresolved wrappers unchanged.
 
 Before every replacement, the reviewer checks that the source is still live,
-writable, widened, undo-enabled, and byte-for-byte identical to the marker that
-opened in Ediff. If another edit makes the review stale, the session stops
+writable, widened, undo-enabled, and identical to the complete owned source that
+opened in Ediff. For readable frames, it also checks the left line prefix, first
+suffix character or EOF, and lexical visibility from the start of the buffer. If another edit makes the review stale, the session stops
 without overwriting that edit.
 
 ## Configure the reviewer

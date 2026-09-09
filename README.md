@@ -16,7 +16,7 @@ tab, or Cowork. Paste this prompt:
 
 ```text
 Set up AgentLaTeX in this LaTeX repository. Follow
-https://raw.githubusercontent.com/chughtapan/agentlatex/v0.3.0/BOOTSTRAP.md
+https://raw.githubusercontent.com/chughtapan/agentlatex/v0.4.0/BOOTSTRAP.md
 exactly. If Emacs is available, install the reviewer in my personal Emacs
 configuration. Do not change manuscript content during setup. Finish every
 step you can, verify the installation, and tell me only what needs human action.
@@ -28,36 +28,48 @@ checks strict and review builds. If a plugin UI needs approval, approve that
 single request and tell the agent to continue.
 
 The same prompt works when a repository already uses AgentLaTeX. It verifies
-the shared setup and installs only the current teammate's local integrations.
+the shared setup and installs the current teammate's local integrations. In an
+existing shared paper, readable framing activates only after the owner confirms
+that teammates have compatible reviewers or will use the manual recipe. Local
+installation can finish while that shared activation remains staged.
 
 ## Review edits
 
-In Emacs, open any project `.tex` file and run:
+**In Overleaf or another source editor:** search for `%%% AGENTEDIT START:`.
+Each block shows a stable ID, reason, exact original, and proposal on separate
+lines. Follow the [source-editor decision recipe](docs/readable-edits.md#decide-in-a-source-editor-including-overleaf)
+to accept, reject, or defer an edit while preserving the surrounding source.
 
-```text
-M-x agentedit-review
-```
+**In Emacs:** open a project `.tex` file and run `M-x agentedit-review`. Use `A`
+to accept, `R` to restore the original, or `S` to decide later. Each word or
+fragment stays an independent comparison. AUCTeX follows the complete master
+paper. Decisions remove the full frame, support undo, and do not save the buffer.
+See the [Emacs guide](emacs/README.md).
 
-With AUCTeX, the command follows `TeX-master` and reviews the complete paper.
-Use `A` to accept, `R` to restore the original, or `S` to decide later.
-The reviewer changes the buffer but does not save it.
+Try both routes on the [disposable two-edit sample](examples/readable-review.tex).
+The [readable-edit guide](docs/readable-edits.md) explains the format and gives
+exact expected results for a first review.
 
-Without Emacs, compile `agent-review.tex` to read proposed text or
-`agent-original-review.tex` to read retained original text. The normal paper
-entry point stays strict and rejects unresolved edits.
+To preview PDFs, compile `agent-review.tex` for proposed text or
+`agent-original-review.tex` for original text. The ordinary paper entry point
+stays strict and rejects unresolved macros.
 
-## See what an edit contains
+## See what a precise edit contains
 
 ```tex
-\agentedit{intro-claim}
-  {State the measured scope instead of making a universal claim.}
-  {The system always terminates.}
-  {The system terminated in every measured run.}
+The system %
+%%% AGENTEDIT START: word %%%
+\agentedit{word}
+  {Review this precise change.}
+  {always}
+  {usually} %
+%%% AGENTEDIT END: word %%%
+terminates.
 ```
 
-The four arguments are a stable ID, the reason, the exact original source, and
-the proposed source. Only a human reviewer removes the wrapper or changes the
-retained original.
+The change is only `always` → `usually`. The banners make it easier to find;
+unchanged paragraph text stays outside the decision. Only a human resolves the
+edit. Old compact macros remain reviewable without bulk conversion.
 
 ## Share the setup
 
@@ -68,13 +80,16 @@ plugin and Emacs configuration outside the paper repository.
 Teammates pull those shared files and paste the same setup prompt. AgentLaTeX
 repairs missing project pieces and handles each teammate's local installation.
 
-Guard hooks run in Codex, Claude Code, Claude Desktop Code, and Cowork.
+Guard integrations are provided for Codex, Claude Code, Claude Desktop Code,
+and Cowork. Setup verifies the active host after any required reload; installed
+files alone do not prove that a hook is running.
 Ordinary Claude Chat can follow the editing contract but cannot enforce it with
 a hook.
 
 ## Read more
 
 - [Agent bootstrap contract](BOOTSTRAP.md)
+- [Guard editing contract](plugins/agentedit-guard/skills/agentedit-guard/SKILL.md)
 - [Emacs and AUCTeX reviewer guide](emacs/README.md)
 - [Overleaf guide](overleaf/README.md)
 - [Contributor guide](CONTRIBUTING.md)

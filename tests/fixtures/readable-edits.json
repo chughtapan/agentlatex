@@ -1,0 +1,762 @@
+{
+  "version": 1,
+  "valid": [
+    {
+      "id": "word",
+      "prefix": "The system ",
+      "original": "always",
+      "proposed": "usually",
+      "whitespace": " ",
+      "suffix": "terminates.",
+      "frame": "%\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\n",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "rejected": "The system always terminates.",
+      "accepted": "The system usually terminates."
+    },
+    {
+      "id": "fragment",
+      "prefix": "inter",
+      "original": "nation",
+      "proposed": "region",
+      "whitespace": "",
+      "suffix": "al",
+      "frame": "%\n%%% AGENTEDIT START: fragment %%%\n\\agentedit{fragment}\n  {Review this precise change.}\n  {nation}\n  {region}%\n%%% AGENTEDIT END: fragment %%%\n",
+      "source": "inter%\n%%% AGENTEDIT START: fragment %%%\n\\agentedit{fragment}\n  {Review this precise change.}\n  {nation}\n  {region}%\n%%% AGENTEDIT END: fragment %%%\nal",
+      "rejected": "international",
+      "accepted": "interregional"
+    },
+    {
+      "id": "delete-word",
+      "prefix": "A ",
+      "original": "word ",
+      "proposed": "",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: delete-word %%%\n\\agentedit{delete-word}\n  {Review this precise change.}\n  {word }\n  {}%\n%%% AGENTEDIT END: delete-word %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: delete-word %%%\n\\agentedit{delete-word}\n  {Review this precise change.}\n  {word }\n  {}%\n%%% AGENTEDIT END: delete-word %%%\nB",
+      "rejected": "A word B",
+      "accepted": "A B"
+    },
+    {
+      "id": "delete-line",
+      "prefix": "A\n",
+      "original": "word\n",
+      "proposed": "",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: delete-line %%%\n\\agentedit{delete-line}\n  {Review this precise change.}\n  {word\n}\n  {}%\n%%% AGENTEDIT END: delete-line %%%\n",
+      "source": "A\n%\n%%% AGENTEDIT START: delete-line %%%\n\\agentedit{delete-line}\n  {Review this precise change.}\n  {word\n}\n  {}%\n%%% AGENTEDIT END: delete-line %%%\nB",
+      "rejected": "A\nword\nB",
+      "accepted": "A\nB"
+    },
+    {
+      "id": "insert-line",
+      "prefix": "A\n",
+      "original": "",
+      "proposed": "word\n",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: insert-line %%%\n\\agentedit{insert-line}\n  {Review this precise change.}\n  {}\n  {word\n}%\n%%% AGENTEDIT END: insert-line %%%\n",
+      "source": "A\n%\n%%% AGENTEDIT START: insert-line %%%\n\\agentedit{insert-line}\n  {Review this precise change.}\n  {}\n  {word\n}%\n%%% AGENTEDIT END: insert-line %%%\nB",
+      "rejected": "A\nB",
+      "accepted": "A\nword\nB"
+    },
+    {
+      "id": "paragraph",
+      "prefix": "",
+      "original": "A",
+      "proposed": "X",
+      "whitespace": "\n\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: paragraph %%%\n\\agentedit{paragraph}\n  {Review this precise change.}\n  {A}\n  {X}\n\n%\n%%% AGENTEDIT END: paragraph %%%\n",
+      "source": "%\n%%% AGENTEDIT START: paragraph %%%\n\\agentedit{paragraph}\n  {Review this precise change.}\n  {A}\n  {X}\n\n%\n%%% AGENTEDIT END: paragraph %%%\nB",
+      "rejected": "A\n\nB",
+      "accepted": "X\n\nB"
+    },
+    {
+      "id": "insert-paragraph",
+      "prefix": "A",
+      "original": "\n\n",
+      "proposed": "\nword\n",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: insert-paragraph %%%\n\\agentedit{insert-paragraph}\n  {Review this precise change.}\n  {\n\n}\n  {\nword\n}%\n%%% AGENTEDIT END: insert-paragraph %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: insert-paragraph %%%\n\\agentedit{insert-paragraph}\n  {Review this precise change.}\n  {\n\n}\n  {\nword\n}%\n%%% AGENTEDIT END: insert-paragraph %%%\nB",
+      "rejected": "A\n\nB",
+      "accepted": "A\nword\nB"
+    },
+    {
+      "id": "delete-paragraph",
+      "prefix": "A",
+      "original": "\nword\n",
+      "proposed": "\n\n",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: delete-paragraph %%%\n\\agentedit{delete-paragraph}\n  {Review this precise change.}\n  {\nword\n}\n  {\n\n}%\n%%% AGENTEDIT END: delete-paragraph %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: delete-paragraph %%%\n\\agentedit{delete-paragraph}\n  {Review this precise change.}\n  {\nword\n}\n  {\n\n}%\n%%% AGENTEDIT END: delete-paragraph %%%\nB",
+      "rejected": "A\nword\nB",
+      "accepted": "A\n\nB"
+    },
+    {
+      "id": "paragraph-comment",
+      "prefix": "A",
+      "original": "\n% comment\n\n",
+      "proposed": "\nword\n",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: paragraph-comment %%%\n\\agentedit{paragraph-comment}\n  {Review this precise change.}\n  {\n% comment\n\n}\n  {\nword\n}%\n%%% AGENTEDIT END: paragraph-comment %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: paragraph-comment %%%\n\\agentedit{paragraph-comment}\n  {Review this precise change.}\n  {\n% comment\n\n}\n  {\nword\n}%\n%%% AGENTEDIT END: paragraph-comment %%%\nB",
+      "rejected": "A\n% comment\n\nB",
+      "accepted": "A\nword\nB"
+    },
+    {
+      "id": "punctuation",
+      "prefix": "Claim",
+      "original": "!",
+      "proposed": "?",
+      "whitespace": " ",
+      "suffix": "Next.",
+      "frame": "%\n%%% AGENTEDIT START: punctuation %%%\n\\agentedit{punctuation}\n  {Review this precise change.}\n  {!}\n  {?} %\n%%% AGENTEDIT END: punctuation %%%\n",
+      "source": "Claim%\n%%% AGENTEDIT START: punctuation %%%\n\\agentedit{punctuation}\n  {Review this precise change.}\n  {!}\n  {?} %\n%%% AGENTEDIT END: punctuation %%%\nNext.",
+      "rejected": "Claim! Next.",
+      "accepted": "Claim? Next."
+    },
+    {
+      "id": "empty-eof",
+      "prefix": "A",
+      "original": "",
+      "proposed": "",
+      "whitespace": "",
+      "suffix": "",
+      "frame": "%\n%%% AGENTEDIT START: empty-eof %%%\n\\agentedit{empty-eof}\n  {Review this precise change.}\n  {}\n  {}%\n%%% AGENTEDIT END: empty-eof %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: empty-eof %%%\n\\agentedit{empty-eof}\n  {Review this precise change.}\n  {}\n  {}%\n%%% AGENTEDIT END: empty-eof %%%\n",
+      "rejected": "A",
+      "accepted": "A"
+    },
+    {
+      "id": "at-bof",
+      "prefix": "",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "",
+      "suffix": ".",
+      "frame": "%\n%%% AGENTEDIT START: at-bof %%%\n\\agentedit{at-bof}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: at-bof %%%\n",
+      "source": "%\n%%% AGENTEDIT START: at-bof %%%\n\\agentedit{at-bof}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: at-bof %%%\n.",
+      "rejected": "old.",
+      "accepted": "new."
+    },
+    {
+      "id": "comment-brace",
+      "prefix": "",
+      "original": "old% } ignored\n",
+      "proposed": "new% { ignored\n",
+      "whitespace": "",
+      "suffix": ".",
+      "frame": "%\n%%% AGENTEDIT START: comment-brace %%%\n\\agentedit{comment-brace}\n  {Review this precise change.}\n  {old% } ignored\n}\n  {new% { ignored\n}%\n%%% AGENTEDIT END: comment-brace %%%\n",
+      "source": "%\n%%% AGENTEDIT START: comment-brace %%%\n\\agentedit{comment-brace}\n  {Review this precise change.}\n  {old% } ignored\n}\n  {new% { ignored\n}%\n%%% AGENTEDIT END: comment-brace %%%\n.",
+      "rejected": "old% } ignored\n.",
+      "accepted": "new% { ignored\n."
+    },
+    {
+      "id": "nested-braces",
+      "prefix": "See ",
+      "original": "\\emph{old}",
+      "proposed": "\\emph{new}",
+      "whitespace": " ",
+      "suffix": "text.",
+      "frame": "%\n%%% AGENTEDIT START: nested-braces %%%\n\\agentedit{nested-braces}\n  {Review this precise change.}\n  {\\emph{old}}\n  {\\emph{new}} %\n%%% AGENTEDIT END: nested-braces %%%\n",
+      "source": "See %\n%%% AGENTEDIT START: nested-braces %%%\n\\agentedit{nested-braces}\n  {Review this precise change.}\n  {\\emph{old}}\n  {\\emph{new}} %\n%%% AGENTEDIT END: nested-braces %%%\ntext.",
+      "rejected": "See \\emph{old} text.",
+      "accepted": "See \\emph{new} text."
+    },
+    {
+      "id": "unicode",
+      "prefix": "Le café est ",
+      "original": "bon",
+      "proposed": "excellent",
+      "whitespace": "\t",
+      "suffix": "!",
+      "frame": "%\n%%% AGENTEDIT START: unicode %%%\n\\agentedit{unicode}\n  {Review this precise change.}\n  {bon}\n  {excellent}\t%\n%%% AGENTEDIT END: unicode %%%\n",
+      "source": "Le café est %\n%%% AGENTEDIT START: unicode %%%\n\\agentedit{unicode}\n  {Review this precise change.}\n  {bon}\n  {excellent}\t%\n%%% AGENTEDIT END: unicode %%%\n!",
+      "rejected": "Le café est bon\t!",
+      "accepted": "Le café est excellent\t!"
+    },
+    {
+      "id": "crlf",
+      "prefix": "A\r\n",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\r\n\r\n",
+      "suffix": "B",
+      "frame": "%\r\n%%% AGENTEDIT START: crlf %%%\r\n\\agentedit{crlf}\r\n  {Review this precise change.}\r\n  {old}\r\n  {new}\r\n\r\n%\r\n%%% AGENTEDIT END: crlf %%%\r\n",
+      "source": "A\r\n%\r\n%%% AGENTEDIT START: crlf %%%\r\n\\agentedit{crlf}\r\n  {Review this precise change.}\r\n  {old}\r\n  {new}\r\n\r\n%\r\n%%% AGENTEDIT END: crlf %%%\r\nB",
+      "rejected": "A\r\nold\r\n\r\nB",
+      "accepted": "A\r\nnew\r\n\r\nB"
+    },
+    {
+      "id": "math",
+      "prefix": "Let $",
+      "original": "x",
+      "proposed": "y",
+      "whitespace": "",
+      "suffix": "=1$.",
+      "frame": "%\n%%% AGENTEDIT START: math %%%\n\\agentedit{math}\n  {Review this precise change.}\n  {x}\n  {y}%\n%%% AGENTEDIT END: math %%%\n",
+      "source": "Let $%\n%%% AGENTEDIT START: math %%%\n\\agentedit{math}\n  {Review this precise change.}\n  {x}\n  {y}%\n%%% AGENTEDIT END: math %%%\n=1$.",
+      "rejected": "Let $x=1$.",
+      "accepted": "Let $y=1$."
+    },
+    {
+      "id": "citation",
+      "prefix": "See \\cite[page ",
+      "original": "2",
+      "proposed": "3",
+      "whitespace": "",
+      "suffix": "]{reference}.",
+      "frame": "%\n%%% AGENTEDIT START: citation %%%\n\\agentedit{citation}\n  {Review this precise change.}\n  {2}\n  {3}%\n%%% AGENTEDIT END: citation %%%\n",
+      "source": "See \\cite[page %\n%%% AGENTEDIT START: citation %%%\n\\agentedit{citation}\n  {Review this precise change.}\n  {2}\n  {3}%\n%%% AGENTEDIT END: citation %%%\n]{reference}.",
+      "rejected": "See \\cite[page 2]{reference}.",
+      "accepted": "See \\cite[page 3]{reference}.",
+      "render": true
+    },
+    {
+      "id": "display-math",
+      "prefix": "\\[\n",
+      "original": "x+y",
+      "proposed": "x-y",
+      "whitespace": "\n",
+      "suffix": "\\]",
+      "frame": "%\n%%% AGENTEDIT START: display-math %%%\n\\agentedit{display-math}\n  {Review this precise change.}\n  {x+y}\n  {x-y}\n%\n%%% AGENTEDIT END: display-math %%%\n",
+      "source": "\\[\n%\n%%% AGENTEDIT START: display-math %%%\n\\agentedit{display-math}\n  {Review this precise change.}\n  {x+y}\n  {x-y}\n%\n%%% AGENTEDIT END: display-math %%%\n\\]",
+      "rejected": "\\[\nx+y\n\\]",
+      "accepted": "\\[\nx-y\n\\]",
+      "render": true
+    },
+    {
+      "id": "addition",
+      "prefix": "A ",
+      "original": "",
+      "proposed": "new",
+      "whitespace": "",
+      "suffix": ".",
+      "frame": "%\n%%% AGENTEDIT START: addition %%%\n\\agentedit{addition}\n  {Review this precise change.}\n  {}\n  {new}%\n%%% AGENTEDIT END: addition %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: addition %%%\n\\agentedit{addition}\n  {Review this precise change.}\n  {}\n  {new}%\n%%% AGENTEDIT END: addition %%%\n.",
+      "rejected": "A .",
+      "accepted": "A new.",
+      "render": true
+    },
+    {
+      "id": "payload-banner",
+      "prefix": "A ",
+      "original": "old%\n%%% AGENTEDIT END: fake %%%\n",
+      "proposed": "new",
+      "whitespace": "",
+      "suffix": ".",
+      "frame": "%\n%%% AGENTEDIT START: payload-banner %%%\n\\agentedit{payload-banner}\n  {Review this precise change.}\n  {old%\n%%% AGENTEDIT END: fake %%%\n}\n  {new}%\n%%% AGENTEDIT END: payload-banner %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: payload-banner %%%\n\\agentedit{payload-banner}\n  {Review this precise change.}\n  {old%\n%%% AGENTEDIT END: fake %%%\n}\n  {new}%\n%%% AGENTEDIT END: payload-banner %%%\n.",
+      "rejected": "A old%\n%%% AGENTEDIT END: fake %%%\n.",
+      "accepted": "A new.",
+      "render": true,
+      "initial": "A \\agentedit{payload-banner}{Why.}{old%\n%%% AGENTEDIT END: fake %%%\n}{new}."
+    },
+    {
+      "id": "whitespace-0-0",
+      "prefix": "",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-0-0 %%%\n\\agentedit{whitespace-0-0}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: whitespace-0-0 %%%\n",
+      "source": "%\n%%% AGENTEDIT START: whitespace-0-0 %%%\n\\agentedit{whitespace-0-0}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: whitespace-0-0 %%%\nB",
+      "rejected": "oldB",
+      "accepted": "newB",
+      "render": false
+    },
+    {
+      "id": "whitespace-0-1",
+      "prefix": "",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": " ",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-0-1 %%%\n\\agentedit{whitespace-0-1}\n  {Review this precise change.}\n  {old}\n  {new} %\n%%% AGENTEDIT END: whitespace-0-1 %%%\n",
+      "source": "%\n%%% AGENTEDIT START: whitespace-0-1 %%%\n\\agentedit{whitespace-0-1}\n  {Review this precise change.}\n  {old}\n  {new} %\n%%% AGENTEDIT END: whitespace-0-1 %%%\nB",
+      "rejected": "old B",
+      "accepted": "new B",
+      "render": false
+    },
+    {
+      "id": "whitespace-0-2",
+      "prefix": "",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\t",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-0-2 %%%\n\\agentedit{whitespace-0-2}\n  {Review this precise change.}\n  {old}\n  {new}\t%\n%%% AGENTEDIT END: whitespace-0-2 %%%\n",
+      "source": "%\n%%% AGENTEDIT START: whitespace-0-2 %%%\n\\agentedit{whitespace-0-2}\n  {Review this precise change.}\n  {old}\n  {new}\t%\n%%% AGENTEDIT END: whitespace-0-2 %%%\nB",
+      "rejected": "old\tB",
+      "accepted": "new\tB",
+      "render": false
+    },
+    {
+      "id": "whitespace-0-3",
+      "prefix": "",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-0-3 %%%\n\\agentedit{whitespace-0-3}\n  {Review this precise change.}\n  {old}\n  {new}\n%\n%%% AGENTEDIT END: whitespace-0-3 %%%\n",
+      "source": "%\n%%% AGENTEDIT START: whitespace-0-3 %%%\n\\agentedit{whitespace-0-3}\n  {Review this precise change.}\n  {old}\n  {new}\n%\n%%% AGENTEDIT END: whitespace-0-3 %%%\nB",
+      "rejected": "old\nB",
+      "accepted": "new\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-0-4",
+      "prefix": "",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\r\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-0-4 %%%\n\\agentedit{whitespace-0-4}\n  {Review this precise change.}\n  {old}\n  {new}\r\n%\n%%% AGENTEDIT END: whitespace-0-4 %%%\n",
+      "source": "%\n%%% AGENTEDIT START: whitespace-0-4 %%%\n\\agentedit{whitespace-0-4}\n  {Review this precise change.}\n  {old}\n  {new}\r\n%\n%%% AGENTEDIT END: whitespace-0-4 %%%\nB",
+      "rejected": "old\r\nB",
+      "accepted": "new\r\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-0-5",
+      "prefix": "",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\n\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-0-5 %%%\n\\agentedit{whitespace-0-5}\n  {Review this precise change.}\n  {old}\n  {new}\n\n%\n%%% AGENTEDIT END: whitespace-0-5 %%%\n",
+      "source": "%\n%%% AGENTEDIT START: whitespace-0-5 %%%\n\\agentedit{whitespace-0-5}\n  {Review this precise change.}\n  {old}\n  {new}\n\n%\n%%% AGENTEDIT END: whitespace-0-5 %%%\nB",
+      "rejected": "old\n\nB",
+      "accepted": "new\n\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-0-6",
+      "prefix": "",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": " \t\r\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-0-6 %%%\n\\agentedit{whitespace-0-6}\n  {Review this precise change.}\n  {old}\n  {new} \t\r\n%\n%%% AGENTEDIT END: whitespace-0-6 %%%\n",
+      "source": "%\n%%% AGENTEDIT START: whitespace-0-6 %%%\n\\agentedit{whitespace-0-6}\n  {Review this precise change.}\n  {old}\n  {new} \t\r\n%\n%%% AGENTEDIT END: whitespace-0-6 %%%\nB",
+      "rejected": "old \t\r\nB",
+      "accepted": "new \t\r\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-1-0",
+      "prefix": "A",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-1-0 %%%\n\\agentedit{whitespace-1-0}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: whitespace-1-0 %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: whitespace-1-0 %%%\n\\agentedit{whitespace-1-0}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: whitespace-1-0 %%%\nB",
+      "rejected": "AoldB",
+      "accepted": "AnewB",
+      "render": false
+    },
+    {
+      "id": "whitespace-1-1",
+      "prefix": "A",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": " ",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-1-1 %%%\n\\agentedit{whitespace-1-1}\n  {Review this precise change.}\n  {old}\n  {new} %\n%%% AGENTEDIT END: whitespace-1-1 %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: whitespace-1-1 %%%\n\\agentedit{whitespace-1-1}\n  {Review this precise change.}\n  {old}\n  {new} %\n%%% AGENTEDIT END: whitespace-1-1 %%%\nB",
+      "rejected": "Aold B",
+      "accepted": "Anew B",
+      "render": false
+    },
+    {
+      "id": "whitespace-1-2",
+      "prefix": "A",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\t",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-1-2 %%%\n\\agentedit{whitespace-1-2}\n  {Review this precise change.}\n  {old}\n  {new}\t%\n%%% AGENTEDIT END: whitespace-1-2 %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: whitespace-1-2 %%%\n\\agentedit{whitespace-1-2}\n  {Review this precise change.}\n  {old}\n  {new}\t%\n%%% AGENTEDIT END: whitespace-1-2 %%%\nB",
+      "rejected": "Aold\tB",
+      "accepted": "Anew\tB",
+      "render": false
+    },
+    {
+      "id": "whitespace-1-3",
+      "prefix": "A",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-1-3 %%%\n\\agentedit{whitespace-1-3}\n  {Review this precise change.}\n  {old}\n  {new}\n%\n%%% AGENTEDIT END: whitespace-1-3 %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: whitespace-1-3 %%%\n\\agentedit{whitespace-1-3}\n  {Review this precise change.}\n  {old}\n  {new}\n%\n%%% AGENTEDIT END: whitespace-1-3 %%%\nB",
+      "rejected": "Aold\nB",
+      "accepted": "Anew\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-1-4",
+      "prefix": "A",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\r\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-1-4 %%%\n\\agentedit{whitespace-1-4}\n  {Review this precise change.}\n  {old}\n  {new}\r\n%\n%%% AGENTEDIT END: whitespace-1-4 %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: whitespace-1-4 %%%\n\\agentedit{whitespace-1-4}\n  {Review this precise change.}\n  {old}\n  {new}\r\n%\n%%% AGENTEDIT END: whitespace-1-4 %%%\nB",
+      "rejected": "Aold\r\nB",
+      "accepted": "Anew\r\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-1-5",
+      "prefix": "A",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\n\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-1-5 %%%\n\\agentedit{whitespace-1-5}\n  {Review this precise change.}\n  {old}\n  {new}\n\n%\n%%% AGENTEDIT END: whitespace-1-5 %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: whitespace-1-5 %%%\n\\agentedit{whitespace-1-5}\n  {Review this precise change.}\n  {old}\n  {new}\n\n%\n%%% AGENTEDIT END: whitespace-1-5 %%%\nB",
+      "rejected": "Aold\n\nB",
+      "accepted": "Anew\n\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-1-6",
+      "prefix": "A",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": " \t\r\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-1-6 %%%\n\\agentedit{whitespace-1-6}\n  {Review this precise change.}\n  {old}\n  {new} \t\r\n%\n%%% AGENTEDIT END: whitespace-1-6 %%%\n",
+      "source": "A%\n%%% AGENTEDIT START: whitespace-1-6 %%%\n\\agentedit{whitespace-1-6}\n  {Review this precise change.}\n  {old}\n  {new} \t\r\n%\n%%% AGENTEDIT END: whitespace-1-6 %%%\nB",
+      "rejected": "Aold \t\r\nB",
+      "accepted": "Anew \t\r\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-2-0",
+      "prefix": "A ",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-2-0 %%%\n\\agentedit{whitespace-2-0}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: whitespace-2-0 %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: whitespace-2-0 %%%\n\\agentedit{whitespace-2-0}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: whitespace-2-0 %%%\nB",
+      "rejected": "A oldB",
+      "accepted": "A newB",
+      "render": false
+    },
+    {
+      "id": "whitespace-2-1",
+      "prefix": "A ",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": " ",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-2-1 %%%\n\\agentedit{whitespace-2-1}\n  {Review this precise change.}\n  {old}\n  {new} %\n%%% AGENTEDIT END: whitespace-2-1 %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: whitespace-2-1 %%%\n\\agentedit{whitespace-2-1}\n  {Review this precise change.}\n  {old}\n  {new} %\n%%% AGENTEDIT END: whitespace-2-1 %%%\nB",
+      "rejected": "A old B",
+      "accepted": "A new B",
+      "render": false
+    },
+    {
+      "id": "whitespace-2-2",
+      "prefix": "A ",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\t",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-2-2 %%%\n\\agentedit{whitespace-2-2}\n  {Review this precise change.}\n  {old}\n  {new}\t%\n%%% AGENTEDIT END: whitespace-2-2 %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: whitespace-2-2 %%%\n\\agentedit{whitespace-2-2}\n  {Review this precise change.}\n  {old}\n  {new}\t%\n%%% AGENTEDIT END: whitespace-2-2 %%%\nB",
+      "rejected": "A old\tB",
+      "accepted": "A new\tB",
+      "render": false
+    },
+    {
+      "id": "whitespace-2-3",
+      "prefix": "A ",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-2-3 %%%\n\\agentedit{whitespace-2-3}\n  {Review this precise change.}\n  {old}\n  {new}\n%\n%%% AGENTEDIT END: whitespace-2-3 %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: whitespace-2-3 %%%\n\\agentedit{whitespace-2-3}\n  {Review this precise change.}\n  {old}\n  {new}\n%\n%%% AGENTEDIT END: whitespace-2-3 %%%\nB",
+      "rejected": "A old\nB",
+      "accepted": "A new\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-2-4",
+      "prefix": "A ",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\r\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-2-4 %%%\n\\agentedit{whitespace-2-4}\n  {Review this precise change.}\n  {old}\n  {new}\r\n%\n%%% AGENTEDIT END: whitespace-2-4 %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: whitespace-2-4 %%%\n\\agentedit{whitespace-2-4}\n  {Review this precise change.}\n  {old}\n  {new}\r\n%\n%%% AGENTEDIT END: whitespace-2-4 %%%\nB",
+      "rejected": "A old\r\nB",
+      "accepted": "A new\r\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-2-5",
+      "prefix": "A ",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\n\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-2-5 %%%\n\\agentedit{whitespace-2-5}\n  {Review this precise change.}\n  {old}\n  {new}\n\n%\n%%% AGENTEDIT END: whitespace-2-5 %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: whitespace-2-5 %%%\n\\agentedit{whitespace-2-5}\n  {Review this precise change.}\n  {old}\n  {new}\n\n%\n%%% AGENTEDIT END: whitespace-2-5 %%%\nB",
+      "rejected": "A old\n\nB",
+      "accepted": "A new\n\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-2-6",
+      "prefix": "A ",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": " \t\r\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-2-6 %%%\n\\agentedit{whitespace-2-6}\n  {Review this precise change.}\n  {old}\n  {new} \t\r\n%\n%%% AGENTEDIT END: whitespace-2-6 %%%\n",
+      "source": "A %\n%%% AGENTEDIT START: whitespace-2-6 %%%\n\\agentedit{whitespace-2-6}\n  {Review this precise change.}\n  {old}\n  {new} \t\r\n%\n%%% AGENTEDIT END: whitespace-2-6 %%%\nB",
+      "rejected": "A old \t\r\nB",
+      "accepted": "A new \t\r\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-3-0",
+      "prefix": "A\t\n",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-3-0 %%%\n\\agentedit{whitespace-3-0}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: whitespace-3-0 %%%\n",
+      "source": "A\t\n%\n%%% AGENTEDIT START: whitespace-3-0 %%%\n\\agentedit{whitespace-3-0}\n  {Review this precise change.}\n  {old}\n  {new}%\n%%% AGENTEDIT END: whitespace-3-0 %%%\nB",
+      "rejected": "A\t\noldB",
+      "accepted": "A\t\nnewB",
+      "render": false
+    },
+    {
+      "id": "whitespace-3-1",
+      "prefix": "A\t\n",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": " ",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-3-1 %%%\n\\agentedit{whitespace-3-1}\n  {Review this precise change.}\n  {old}\n  {new} %\n%%% AGENTEDIT END: whitespace-3-1 %%%\n",
+      "source": "A\t\n%\n%%% AGENTEDIT START: whitespace-3-1 %%%\n\\agentedit{whitespace-3-1}\n  {Review this precise change.}\n  {old}\n  {new} %\n%%% AGENTEDIT END: whitespace-3-1 %%%\nB",
+      "rejected": "A\t\nold B",
+      "accepted": "A\t\nnew B",
+      "render": false
+    },
+    {
+      "id": "whitespace-3-2",
+      "prefix": "A\t\n",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\t",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-3-2 %%%\n\\agentedit{whitespace-3-2}\n  {Review this precise change.}\n  {old}\n  {new}\t%\n%%% AGENTEDIT END: whitespace-3-2 %%%\n",
+      "source": "A\t\n%\n%%% AGENTEDIT START: whitespace-3-2 %%%\n\\agentedit{whitespace-3-2}\n  {Review this precise change.}\n  {old}\n  {new}\t%\n%%% AGENTEDIT END: whitespace-3-2 %%%\nB",
+      "rejected": "A\t\nold\tB",
+      "accepted": "A\t\nnew\tB",
+      "render": false
+    },
+    {
+      "id": "whitespace-3-3",
+      "prefix": "A\t\n",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-3-3 %%%\n\\agentedit{whitespace-3-3}\n  {Review this precise change.}\n  {old}\n  {new}\n%\n%%% AGENTEDIT END: whitespace-3-3 %%%\n",
+      "source": "A\t\n%\n%%% AGENTEDIT START: whitespace-3-3 %%%\n\\agentedit{whitespace-3-3}\n  {Review this precise change.}\n  {old}\n  {new}\n%\n%%% AGENTEDIT END: whitespace-3-3 %%%\nB",
+      "rejected": "A\t\nold\nB",
+      "accepted": "A\t\nnew\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-3-4",
+      "prefix": "A\t\n",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\r\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-3-4 %%%\n\\agentedit{whitespace-3-4}\n  {Review this precise change.}\n  {old}\n  {new}\r\n%\n%%% AGENTEDIT END: whitespace-3-4 %%%\n",
+      "source": "A\t\n%\n%%% AGENTEDIT START: whitespace-3-4 %%%\n\\agentedit{whitespace-3-4}\n  {Review this precise change.}\n  {old}\n  {new}\r\n%\n%%% AGENTEDIT END: whitespace-3-4 %%%\nB",
+      "rejected": "A\t\nold\r\nB",
+      "accepted": "A\t\nnew\r\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-3-5",
+      "prefix": "A\t\n",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": "\n\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-3-5 %%%\n\\agentedit{whitespace-3-5}\n  {Review this precise change.}\n  {old}\n  {new}\n\n%\n%%% AGENTEDIT END: whitespace-3-5 %%%\n",
+      "source": "A\t\n%\n%%% AGENTEDIT START: whitespace-3-5 %%%\n\\agentedit{whitespace-3-5}\n  {Review this precise change.}\n  {old}\n  {new}\n\n%\n%%% AGENTEDIT END: whitespace-3-5 %%%\nB",
+      "rejected": "A\t\nold\n\nB",
+      "accepted": "A\t\nnew\n\nB",
+      "render": false
+    },
+    {
+      "id": "whitespace-3-6",
+      "prefix": "A\t\n",
+      "original": "old",
+      "proposed": "new",
+      "whitespace": " \t\r\n",
+      "suffix": "B",
+      "frame": "%\n%%% AGENTEDIT START: whitespace-3-6 %%%\n\\agentedit{whitespace-3-6}\n  {Review this precise change.}\n  {old}\n  {new} \t\r\n%\n%%% AGENTEDIT END: whitespace-3-6 %%%\n",
+      "source": "A\t\n%\n%%% AGENTEDIT START: whitespace-3-6 %%%\n\\agentedit{whitespace-3-6}\n  {Review this precise change.}\n  {old}\n  {new} \t\r\n%\n%%% AGENTEDIT END: whitespace-3-6 %%%\nB",
+      "rejected": "A\t\nold \t\r\nB",
+      "accepted": "A\t\nnew \t\r\nB",
+      "render": false
+    }
+  ],
+  "invalid": [
+    {
+      "id": "orphan-end",
+      "source": "%%% AGENTEDIT END: word %%%\n",
+      "error_category": "malformed"
+    },
+    {
+      "id": "orphan-start",
+      "source": "%\n%%% AGENTEDIT START: word %%%\n",
+      "error_category": "START"
+    },
+    {
+      "id": "indented-banner",
+      "source": "The system %\n %%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "malformed"
+    },
+    {
+      "id": "truncated-banner",
+      "source": "%%% AGENTEDIT\n",
+      "error_category": "malformed"
+    },
+    {
+      "id": "misspelled-operation",
+      "source": "The system %\n%%% AGENTEDIT STRAT: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "malformed"
+    },
+    {
+      "id": "wrong-end-id",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: other %%%\nterminates.",
+      "error_category": "right"
+    },
+    {
+      "id": "wrong-macro-id",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{other}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "ID"
+    },
+    {
+      "id": "unsafe-id",
+      "source": "The system %\n%%% AGENTEDIT START: bad id %%%\n\\agentedit{bad id}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: bad id %%%\nterminates.",
+      "error_category": "malformed"
+    },
+    {
+      "id": "missing-left",
+      "source": "The system \n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "left"
+    },
+    {
+      "id": "escaped-left",
+      "source": "The system \\%\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "left"
+    },
+    {
+      "id": "commented-left",
+      "source": "The system % hidden %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "left"
+    },
+    {
+      "id": "missing-right",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually}\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "right"
+    },
+    {
+      "id": "missing-end-newline",
+      "source": "%\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%",
+      "error_category": "right"
+    },
+    {
+      "id": "nonmaximal-whitespace",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\n terminates.",
+      "error_category": "whitespace"
+    },
+    {
+      "id": "inline-argument",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.} {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "new line"
+    },
+    {
+      "id": "unicode-wrapper",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "argument"
+    },
+    {
+      "id": "empty-reason",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "visible text"
+    },
+    {
+      "id": "unbalanced",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "argument"
+    },
+    {
+      "id": "nested-macro",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {\\agentedit{x}{why}{a}{b}} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "nested"
+    },
+    {
+      "id": "interstitial",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\nextra\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "START"
+    },
+    {
+      "id": "duplicate-id",
+      "source": "%\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nThe system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "duplicate"
+    },
+    {
+      "id": "crossing",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {usually} %\n%%% AGENTEDIT START: next %%%\nterminates.",
+      "error_category": "right"
+    },
+    {
+      "id": "unterminated-verb",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {\\verb|unfinished} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "unterminated"
+    },
+    {
+      "id": "unterminated-verbatim",
+      "source": "The system %\n%%% AGENTEDIT START: word %%%\n\\agentedit{word}\n  {Review this precise change.}\n  {always}\n  {\\begin{verbatim}} %\n%%% AGENTEDIT END: word %%%\nterminates.",
+      "error_category": "unterminated"
+    }
+  ],
+  "opaque": [
+    {
+      "id": "comments",
+      "source": "%%%% AGENTEDIT START: sample %%%\n% \\agentedit{x}{why}{old}{new}\n"
+    },
+    {
+      "id": "verb",
+      "source": "\\verb|%%% AGENTEDIT| \\\\agentedit{x}{why}{old}{new}"
+    },
+    {
+      "id": "verbatim-crlf",
+      "source": "\\begin{verbatim}\r\n%%% AGENTEDIT START: example %%%\r\n\\agentedit{x}{why}{old}{new}\r\n\\end{verbatim}\r\n"
+    }
+  ]
+}
