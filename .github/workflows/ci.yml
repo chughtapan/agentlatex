@@ -79,15 +79,14 @@ jobs:
               --output /tmp/auctex.tar.lz
             echo "1b3d512e0547e286785a3ae8dd30f63ed4523c5a680f51acc272e3c58f30d7e0  /tmp/auctex.tar.lz" \
               | sha256sum --check
-            lzip --decompress --stdout /tmp/auctex.tar.lz \
-              > /tmp/auctex.tar
           else
             curl --fail --location --retry 3 \
-              https://elpa.gnu.org/packages/auctex-14.1.2.tar \
-              --output /tmp/auctex.tar
-            echo "3772e96a16781cc795c27355b63a09bb67ca963acd7ec65294e694aaa22ee936  /tmp/auctex.tar" \
+              https://elpa.gnu.org/packages/auctex-14.1.2.tar.lz \
+              --output /tmp/auctex.tar.lz
+            echo "090c6f3d5dbcf5a43fc6745bad4e496da5e0eeec949ca41d4633630e73407d74  /tmp/auctex.tar.lz" \
               | sha256sum --check
           fi
+          lzip --decompress --stdout /tmp/auctex.tar.lz > /tmp/auctex.tar
       - name: Install AUCTeX ${{ matrix.auctex-version }} as an Emacs package
         run: |
           emacs --batch -Q \

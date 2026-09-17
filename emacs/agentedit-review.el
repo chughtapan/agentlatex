@@ -20,6 +20,7 @@
 (require 'ediff)
 (require 'face-remap)
 (require 'subr-x)
+(require 'button)
 
 (declare-function TeX-auto-parse "tex" ())
 (declare-function TeX-master-file "tex" (&optional extension nondirectory ask))
@@ -114,12 +115,22 @@
   :type '(repeat string)
   :group 'agentedit-review)
 
+(defcustom agentedit-review-auto-save t
+  "Save the owning source after each confirmed accept or reject.
+Saving writes the entire source buffer, including existing unsaved edits.
+The invocation buffer's value is captured for the entire review session,
+including an AUCTeX project.  Set nil before review for manual saving."
+  :type 'boolean
+  :safe #'booleanp
+  :group 'agentedit-review)
+
 (defconst agentedit-review-format-version "blocks-v1"
   "Readable source format supported by this loaded reviewer.")
 
 (cl-defstruct (agentedit-review-record
                (:constructor agentedit-review--make-record))
-  id reason original edited start end snapshot source framed whitespace left-context right-context)
+  id reason original edited start end snapshot source framed whitespace left-context right-context
+  decision result source-line)
 
 (cl-defstruct (agentedit-review-session
                (:constructor agentedit-review--make-session))
@@ -127,11 +138,24 @@
   (state 'starting) pending-action pending-announcement control
   projection-a projection-b cleanup-in-progress cleanup-complete lock-key
   sources lock-keys
-  last-error applied-decision completed-decision completed-record)
+  last-error applied-decision completed-decision completed-record
+  view draft edit-entry full-context files auto-save report recovery timer
+  (custom 0) save-confirmed teardown-in-progress)
+
+(cl-defstruct (agentedit-review-view
+               (:constructor agentedit-review--make-view-data))
+  text start end pending diagnostics tick prefix suffix offset fallback)
+
+(cl-defstruct (agentedit-review-file
+               (:constructor agentedit-review--make-file))
+  source path filename tick scope-start scope-line details outside outside-details diagnostics
+  (accepted 0) (custom 0) (rejected 0) (skipped 0)
+  (save-status 'untouched) saved-tick error)
 
 (defconst agentedit-review--transitions
   '((starting . (reviewing finished failed))
-    (reviewing . (deciding aborting failed))
+    (reviewing . (editing deciding aborting stale failed))
+    (editing . (reviewing aborting stale failed))
     (deciding . (reviewing finished stale partial-failure failed))))
 
 (defvar agentedit-review--sessions (make-hash-table :test #'eq)
@@ -150,6 +174,12 @@
 (defvar-local agentedit-review--mode-controls nil)
 (defvar-local agentedit-review--mode-counts nil)
 (defvar-local agentedit-review--mode-status nil)
+(defvar-local agentedit-review--fragment-start nil)
+(defvar-local agentedit-review--fragment-end nil)
+(defvar-local agentedit-review--fragment-overlay nil)
+(defvar agentedit-review--changing-projection nil)
+(defvar agentedit-review--display-diagnostics nil)
+(defvar agentedit-review--last-session nil)
 
 (defconst agentedit-review--minimum-emacs-version '(29 4)
   "Oldest Emacs major and minor release supported by AgentEdit review.")
@@ -473,17 +503,20 @@ MARKER-POSITION is used for located errors."
               (agentedit-review--right-context end))
         record))))
 
-(defun agentedit-review--scan-records (origin)
+(defun agentedit-review--scan-records (origin &optional display-origin)
   "Return records at ORIGIN or later, including a frame containing ORIGIN.
-Legacy calls retain their control-word origin semantics."
+Legacy calls retain their control-word origin semantics.
+For display discovery, DISPLAY-ORIGIN allows malformed or duplicate legacy
+records before that position to remain outside strict queue validation."
   (let ((records nil) (ids (make-hash-table :test #'equal))
         (cursor (point-min)) separator)
     (cl-labels
         ((collect (record)
            (let ((id (agentedit-review-record-id record)))
-             (when (gethash id ids)
-               (agentedit-review--line-error cursor "duplicate marker ID %s" id))
-             (puthash id t ids)
+             (unless (and display-origin (< cursor display-origin))
+               (when (gethash id ids)
+                 (agentedit-review--line-error cursor "duplicate marker ID %s" id))
+               (puthash id t ids))
              (push record records))))
       (while (< cursor (point-max))
         (goto-char cursor)
@@ -523,9 +556,20 @@ Legacy calls retain their control-word origin semantics."
                                      (setq scan (cadr (agentedit-review--parse-braced-at scan cursor))))
                                    scan)
                                (user-error word-end)))
-                     (let ((record (agentedit-review--parse-record cursor word-end)))
-                       (collect record)
-                       (setq cursor (marker-position (agentedit-review-record-end record))))))
+                     (let ((record
+                            (if (and display-origin (< cursor display-origin))
+                                (condition-case problem
+                                    (agentedit-review--parse-record cursor word-end)
+                                  (user-error
+                                   (push (error-message-string problem)
+                                         agentedit-review--display-diagnostics)
+                                   nil))
+                              (agentedit-review--parse-record cursor word-end))))
+                       (if record
+                           (progn
+                             (collect record)
+                             (setq cursor (marker-position (agentedit-review-record-end record))))
+                         (setq cursor word-end)))))
                   (t (setq cursor word-end)))))))
           (_ (setq cursor (1+ cursor))))))
     (nreverse records)))
@@ -582,6 +626,498 @@ Legacy calls retain their control-word origin semantics."
       'ediff-fine-diff-B 'agentedit-review-proposed-fine)))
   (setq-local header-line-format (agentedit-review--projection-header side)))
 
+(defun agentedit-review--file-state (session source)
+  "Return SESSION's accounting entry for SOURCE."
+  (cl-find source (agentedit-review-session-files session)
+           :key #'agentedit-review-file-source :test #'eq))
+
+(defun agentedit-review--note-current-file-error (session message)
+  "Record MESSAGE on SESSION's current owning file when known."
+  (let* ((record (if (or (agentedit-review-session-applied-decision session)
+                         (agentedit-review-session-pending-action session))
+                     (agentedit-review-session-completed-record session)
+                   (agentedit-review--current-record session)))
+         (file (and record (agentedit-review--file-state
+                            session (agentedit-review--record-source record)))))
+    (when file (setf (agentedit-review-file-error file) message))))
+
+(defun agentedit-review--initialize-files (session)
+  "Capture source witnesses and initialize SESSION's persistent accounting."
+  (setf (agentedit-review-session-files session)
+        (mapcar
+         (lambda (source)
+           (with-current-buffer source
+             (let* ((records (cl-remove-if-not
+                              (lambda (record)
+                                (eq source (agentedit-review--record-source record)))
+                              (agentedit-review-session-records session)))
+                    (origin (if records (agentedit-review-record-start (car records)) (point-max)))
+                    (agentedit-review--display-diagnostics nil)
+                    (details (save-excursion
+                               (agentedit-review--scan-records (point-min) origin))))
+               (dolist (record records)
+                 (setf (agentedit-review-record-source-line record)
+                       (agentedit-review--record-line record)))
+               (agentedit-review--make-file
+                :source source :path (or buffer-file-name (buffer-name))
+                :filename buffer-file-name :tick (buffer-chars-modified-tick)
+                :scope-start (copy-marker origin) :scope-line (line-number-at-pos origin)
+                :details details :diagnostics agentedit-review--display-diagnostics
+                :outside-details (agentedit-review--outside-details details records)
+                :outside (length (agentedit-review--outside-details details records))))))
+         (agentedit-review--session-sources session))))
+
+(defun agentedit-review--save-preflight (session record)
+  "Check the source and disk target before SESSION applies or saves RECORD."
+  (agentedit-review--source-ready record)
+  (when (agentedit-review-session-auto-save session)
+    (let* ((source (agentedit-review--record-source record))
+           (file (agentedit-review--file-state session source)))
+      (with-current-buffer source
+        (unless buffer-file-name
+          (user-error "Source has no filename; save it first or set agentedit-review-auto-save nil and restart"))
+        (unless (and file (equal buffer-file-name (agentedit-review-file-filename file)))
+          (user-error "Source filename changed; inspect the source and restart review"))
+        (unless (verify-visited-file-modtime source)
+          (user-error "Source file changed on disk; reconcile it before saving and restart review"))))))
+
+(defun agentedit-review--expected-source (record replacement)
+  "Return the exact source expected after resolving RECORD to REPLACEMENT."
+  (with-current-buffer (agentedit-review--record-source record)
+    (concat (buffer-substring-no-properties (point-min) (agentedit-review-record-start record))
+            replacement (agentedit-review-record-whitespace record)
+            (buffer-substring-no-properties (agentedit-review-record-end record) (point-max)))))
+
+(defun agentedit-review--save-decision (session record expected)
+  "Save RECORD's owning source for SESSION and verify EXPECTED text.
+Do not retry an applied decision.  A failed save never implies rollback."
+  (let* ((source (agentedit-review--record-source record))
+         (file (agentedit-review--file-state session source)))
+    (with-current-buffer source
+      (unless (equal expected (buffer-substring-no-properties (point-min) (point-max)))
+        (error "Source changed while applying the decision; inspect it before continuing"))
+      (when file
+        (setf (agentedit-review-file-tick file) (buffer-chars-modified-tick)
+              (agentedit-review-file-save-status file)
+              (if (agentedit-review-session-auto-save session) 'unconfirmed 'manual)))
+      (when (agentedit-review-session-auto-save session)
+        (agentedit-review--save-preflight session record)
+        (message "AgentEdit: saving %s..." (agentedit-review-file-path file))
+        (save-buffer)
+        (unless (and (buffer-live-p source)
+                     (equal buffer-file-name (agentedit-review-file-filename file))
+                     (not (buffer-modified-p))
+                     (equal expected (buffer-substring-no-properties (point-min) (point-max)))
+                     (verify-visited-file-modtime source))
+          (error "Save changed the text/target or left the source unsaved; inspect source and save hooks"))
+        ;; A write hook may claim success without writing.  Verify through
+        ;; normal file handlers and the source's coding system as well.
+        (let ((filename buffer-file-name)
+              (coding-system-for-read buffer-file-coding-system))
+          (unless (equal expected
+                         (with-temp-buffer
+                           (insert-file-contents filename)
+                           (buffer-substring-no-properties (point-min) (point-max))))
+            (error "Saved file does not match the applied source; inspect file and save hooks")))
+        (setf (agentedit-review-file-save-status file) 'saved
+              (agentedit-review-file-saved-tick file) (buffer-chars-modified-tick)
+              (agentedit-review-file-tick file) (buffer-chars-modified-tick)
+              (agentedit-review-session-save-confirmed session) t)))))
+
+(defun agentedit-review--record-decision (session record kind)
+  "Count applied KIND for RECORD in SESSION exactly once."
+  (let* ((file (agentedit-review--file-state session (agentedit-review--record-source record)))
+         (custom (and (eq kind 'accept)
+                      (agentedit-review-session-view session)
+                      (not (equal (agentedit-review-session-draft session)
+                                  (agentedit-review-record-edited record))))))
+    (setf (agentedit-review-record-decision record) kind
+          (agentedit-review-record-result record)
+          (and (eq kind 'accept) (agentedit-review-session-draft session)))
+    (pcase kind
+      ('accept
+       (cl-incf (agentedit-review-session-accepted session))
+       (when custom (cl-incf (agentedit-review-session-custom session)))
+       (when file
+         (cl-incf (agentedit-review-file-accepted file))
+         (when custom (cl-incf (agentedit-review-file-custom file)))))
+      ('reject
+       (cl-incf (agentedit-review-session-rejected session))
+       (when file (cl-incf (agentedit-review-file-rejected file))))
+      ('skip
+       (cl-incf (agentedit-review-session-skipped session))
+       (when file (cl-incf (agentedit-review-file-skipped file)))))
+    (when (and file (not (eq kind 'skip)))
+      (setf (agentedit-review-file-save-status file)
+            (if (agentedit-review-session-auto-save session) 'unconfirmed 'manual)))
+    (setf (agentedit-review-session-completed-decision session) kind
+          (agentedit-review-session-completed-record session) record)
+    (cl-incf (agentedit-review-session-index session))))
+
+(defun agentedit-review--file-save-label (file)
+  "Return the historical save outcome and current source status for FILE."
+  (let ((source (agentedit-review-file-source file)))
+    (concat
+     (pcase (agentedit-review-file-save-status file)
+       ('saved "Saved at last decision")
+       ('unconfirmed "Applied; save not confirmed")
+       ('manual "Applied; manual save")
+       (_ "No decision saved by this review"))
+     (if (buffer-live-p source) "" "; source buffer closed"))))
+
+(defun agentedit-review--report-button (label buffer &optional position)
+  "Insert a keyboard-activatable LABEL visiting BUFFER at POSITION."
+  (insert-text-button
+   label 'follow-link t
+   'action (lambda (_button)
+             (unless (buffer-live-p buffer)
+               (user-error "Buffer is closed; reopen the source file using its path"))
+             (pop-to-buffer buffer)
+             (when position
+               (with-current-buffer buffer
+                 (goto-char (max (point-min) (min position (point-max)))))))))
+
+(defun agentedit-review--render-report (session)
+  "Render SESSION's persistent report without depending on live Ediff panes."
+  (let ((buffer (or (and (buffer-live-p (agentedit-review-session-report session))
+                         (agentedit-review-session-report session))
+                    (generate-new-buffer "*AgentEdit report*"))))
+    (setf (agentedit-review-session-report session) buffer)
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t)
+            (print-escape-newlines t)
+            (print-escape-control-characters t))
+        (erase-buffer)
+        (insert (format "AgentEdit review · %s\n\n" (agentedit-review-session-state session)))
+        (insert (if (agentedit-review-session-auto-save session)
+                    "AUTO-SAVE: confirmed A/R saves the entire owning source, including existing unsaved edits.\n"
+                  "MANUAL: decisions remain in source buffers; save with your normal Emacs workflow.\n"))
+        (insert "Counts describe the selected review queue. Pending outside its scope are separate.\n")
+        (insert "Record strings are quoted so embedded newlines and controls cannot resemble report fields.\n")
+        (insert "g refresh · TAB/RET follow links · q close report\n\n")
+        (when (agentedit-review-session-last-error session)
+          (insert "Stopped: " (agentedit-review-session-last-error session) "\n")
+          (insert (if (agentedit-review-session-applied-decision session)
+                      "The decision is already applied. Inspect the owning source, resolve the problem, C-x C-s, then M-x agentedit-review for remaining records.\n"
+                    "No current decision was applied. Inspect the source and recovered draft, then M-x agentedit-review against the current text.\n")))
+        (when (buffer-live-p (agentedit-review-session-recovery session))
+          (agentedit-review--report-button "Open recovered draft"
+                                          (agentedit-review-session-recovery session))
+          (insert " — retained until you close it; not durable across Emacs exit.\n"))
+        (dolist (file (agentedit-review-session-files session))
+          (let* ((source (agentedit-review-file-source file))
+                 (records (cl-remove-if-not
+                           (lambda (record) (eq source (agentedit-review--record-source record)))
+                           (agentedit-review-session-records session)))
+                 (unvisited (- (length records) (agentedit-review-file-accepted file)
+                               (agentedit-review-file-rejected file) (agentedit-review-file-skipped file))))
+            (insert "\n" (agentedit-review-file-path file) "\n")
+            (insert (format "Review scope: queue from source line %s at entry.\n"
+                            (or (agentedit-review-file-scope-line file) "unknown")))
+            (dolist (diagnostic (agentedit-review-file-diagnostics file))
+              (insert "Context diagnostic: " diagnostic "\n"))
+            (when (buffer-live-p source)
+              (agentedit-review--report-button "Visit source" source)
+              (insert " · "))
+            (insert (agentedit-review--file-save-label file))
+            (when (buffer-live-p source)
+              (with-current-buffer source
+                (when (and (agentedit-review-file-saved-tick file)
+                           (/= (buffer-chars-modified-tick) (agentedit-review-file-saved-tick file)))
+                  (with-current-buffer buffer (insert "; modified since verified save"))))
+              (when (buffer-modified-p source) (insert "; currently unsaved")))
+            (insert "\n")
+            (insert (format "%d accepted (%d custom), %d rejected, %d skipped, %d unvisited; %d unresolved in this review.\n"
+                            (agentedit-review-file-accepted file) (agentedit-review-file-custom file)
+                            (agentedit-review-file-rejected file) (agentedit-review-file-skipped file)
+                            unvisited (+ unvisited (agentedit-review-file-skipped file))))
+            (insert (format "%d pending outside review scope at last comparison.\n"
+                            (or (agentedit-review-file-outside file) 0)))
+            (when (agentedit-review-file-error file)
+              (insert "Error: " (agentedit-review-file-error file) "\n"))
+            (dolist (record records)
+              (insert (format "\n  %S · %s\n  Reason: %S\n  Original: %S\n  Proposed: %S\n"
+                              (agentedit-review-record-id record)
+                              (or (agentedit-review-record-decision record) 'unvisited)
+                              (agentedit-review-record-reason record)
+                              (agentedit-review-record-original record)
+                              (agentedit-review-record-edited record)))
+              (insert (format "  Source: %s:%s (line at entry)\n"
+                              (agentedit-review-file-path file)
+                              (or (agentedit-review-record-source-line record) "unknown")))
+              (when (and (buffer-live-p source)
+                         (marker-position (agentedit-review-record-start record)))
+                (insert "  ")
+                (agentedit-review--report-button "Visit record" source (agentedit-review-record-start record))
+                (insert "\n"))
+              (when (agentedit-review-record-result record)
+                (insert (format "  Applied result: %S\n" (agentedit-review-record-result record)))))
+            (dolist (record (agentedit-review-file-outside-details file))
+              (insert (format "\n  Pending outside scope: %S\n  Reason: %S\n  Original: %S\n  Proposed: %S\n"
+                              (agentedit-review-record-id record) (agentedit-review-record-reason record)
+                              (agentedit-review-record-original record) (agentedit-review-record-edited record))))))
+        (insert "\nCommands in AgentEdit panes/control:\n"
+                "C-c e edit · C-c o original seed · C-c p proposal seed\n"
+                "C-c C-c stage (no source change) · C-c C-k cancel edit\n"
+                "C-c w paragraph/full current file · C-c l report\n"
+                "Control: A apply result, R keep original, S skip, q confirm stop.\n"
+                "E/? remain native Ediff help. While EDITING, stage/cancel before A/R/S or C-c w.\n")
+        (delay-mode-hooks (special-mode))
+        (setq-local agentedit-review--session session)
+        (local-set-key (kbd "g") #'agentedit-review-report)
+        (goto-char (point-min))))
+    buffer))
+
+;;;###autoload
+(defun agentedit-review-report ()
+  "Show the active or latest AgentEdit session report.
+The report survives completion, quit, and failure.  Use g to refresh live
+source status and TAB/RET to visit source or recovered draft buffers."
+  (interactive)
+  (let ((session (or agentedit-review--session agentedit-review--last-session)))
+    (unless session (user-error "No AgentEdit review has run in this Emacs session"))
+    (pop-to-buffer (agentedit-review--render-report session))))
+
+(defun agentedit-review--check-source-snapshot (session)
+  "Refuse SESSION if the owning source changed outside its known decisions."
+  (let* ((record (agentedit-review--current-record session))
+         (source (agentedit-review--record-source record))
+         (file (agentedit-review--file-state session source))
+         (view (agentedit-review-session-view session)))
+    (agentedit-review--source-ready record)
+    (with-current-buffer source
+      (when (or (and file (/= (buffer-chars-modified-tick)
+                             (agentedit-review-file-tick file)))
+                (and view (/= (buffer-chars-modified-tick)
+                             (agentedit-review-view-tick view))))
+        (signal 'agentedit-review-stale nil)))))
+
+(defun agentedit-review--same-span-p (first second)
+  "Return non-nil when FIRST and SECOND own the same live source span."
+  (let ((first-start (marker-position (agentedit-review-record-start first)))
+        (first-end (marker-position (agentedit-review-record-end first)))
+        (second-start (marker-position (agentedit-review-record-start second)))
+        (second-end (marker-position (agentedit-review-record-end second))))
+    (and first-start first-end second-start second-end
+         (eq (agentedit-review--record-source first)
+             (agentedit-review--record-source second))
+         (= first-start second-start)
+         (= first-end second-end))))
+
+(defun agentedit-review--outside-details (records queued)
+  "Keep RECORDS outside QUEUED while their source markers are still live."
+  (cl-remove-if
+   (lambda (record)
+     (cl-some (lambda (item) (agentedit-review--same-span-p record item)) queued))
+   records))
+
+(defun agentedit-review--build-view (session)
+  "Build SESSION's clean original baseline and explicit source-span mapping."
+  (agentedit-review--check-source-snapshot session)
+  (let* ((active (agentedit-review--current-record session))
+         (source (agentedit-review--record-source active))
+         (file (agentedit-review--file-state session source))
+         (origin (if file (agentedit-review-file-scope-start file)
+                   (agentedit-review-record-start active)))
+         (agentedit-review--display-diagnostics nil))
+    (with-current-buffer source
+      (save-excursion
+        (let ((records (agentedit-review--scan-records (point-min) origin))
+              (cursor (point-min)) (size 0) chunks pending start end)
+          (dolist (record records)
+            (let* ((left (marker-position (agentedit-review-record-start record)))
+                   (right (marker-position (agentedit-review-record-end record)))
+                   (prefix (buffer-substring-no-properties cursor left))
+                   (original (agentedit-review-record-original record))
+                   (whitespace (or (agentedit-review-record-whitespace record) ""))
+                   (mapped-start (+ 1 size (length prefix)))
+                   (mapped-end (+ mapped-start (length original))))
+              (push prefix chunks)
+              (push original chunks)
+              (push whitespace chunks)
+              (if (agentedit-review--same-span-p active record)
+                  (progn
+                    (unless (equal (agentedit-review-record-snapshot active)
+                                   (agentedit-review-record-snapshot record))
+                      (signal 'agentedit-review-stale nil))
+                    (setq start mapped-start end mapped-end))
+                (push (list record mapped-start mapped-end) pending))
+              (setq size (+ size (length prefix) (length original) (length whitespace))
+                    cursor right)))
+          ;; A custom decision can hide a legacy marker without changing its bytes.
+          (unless start (signal 'agentedit-review-stale nil))
+          (push (buffer-substring-no-properties cursor (point-max)) chunks)
+          (when file
+            (setf (agentedit-review-file-diagnostics file) agentedit-review--display-diagnostics
+                  (agentedit-review-file-details file) records
+                  (agentedit-review-file-outside-details file)
+                  (agentedit-review--outside-details records (agentedit-review-session-records session))
+                  (agentedit-review-file-outside file)
+                  (length (agentedit-review--outside-details
+                           records (agentedit-review-session-records session)))))
+          (agentedit-review--make-view-data
+           :text (apply #'concat (nreverse chunks)) :start start :end end
+           :pending (nreverse pending)
+           :diagnostics (nreverse agentedit-review--display-diagnostics)
+           :tick (buffer-chars-modified-tick)))))))
+
+(defun agentedit-review--copy-text-settings (source)
+  "Copy safe syntax and paragraph settings from SOURCE into this buffer.
+Do not activate the source mode, its hooks, or file-local evaluation."
+  (set-syntax-table (copy-syntax-table (with-current-buffer source (syntax-table))))
+  (dolist (variable '(paragraph-start paragraph-separate
+                     paragraph-ignore-fill-prefix fill-prefix))
+    (set (make-local-variable variable) (buffer-local-value variable source)))
+  (setq-local truncate-lines nil)
+  (setq-local word-wrap t))
+
+(defun agentedit-review--paragraph-bounds (view source)
+  "Return paragraph bounds enclosing VIEW's entire active span using SOURCE.
+An empty insertion includes each available neighboring paragraph.
+Return nil if the mode's paragraph rules cannot produce a usable interval."
+  (condition-case nil
+      (with-temp-buffer
+        (insert (agentedit-review-view-text view))
+        (agentedit-review--copy-text-settings source)
+        (let ((start (agentedit-review-view-start view))
+              (end (agentedit-review-view-end view)) left right)
+          (goto-char (if (= start end) (max (point-min) (1- start)) start))
+          (backward-paragraph)
+          (setq left (point))
+          (goto-char (if (= start end) (min (point-max) (1+ end))
+                       (max start (1- end))))
+          (forward-paragraph)
+          (setq right (point))
+          (when (and (<= left start) (>= right end) (< left right))
+            (cons left right))))
+    (error nil)))
+
+(defun agentedit-review--select-context (session)
+  "Set SESSION's common display prefix/suffix from its cached baseline."
+  (let* ((view (agentedit-review-session-view session))
+         (source (agentedit-review--record-source (agentedit-review--current-record session)))
+         (text (agentedit-review-view-text view))
+         (bounds (unless (agentedit-review-session-full-context session)
+                   (agentedit-review--paragraph-bounds view source)))
+         (left (if bounds (car bounds) 1))
+         (right (if bounds (cdr bounds) (1+ (length text)))))
+    (setf (agentedit-review-view-prefix view)
+          (substring text (1- left) (1- (agentedit-review-view-start view)))
+          (agentedit-review-view-suffix view)
+          (substring text (1- (agentedit-review-view-end view)) (1- right))
+          (agentedit-review-view-offset view) (1- left)
+          (agentedit-review-view-fallback view)
+          (and (not bounds) (not (agentedit-review-session-full-context session))))))
+
+(defun agentedit-review--projection-before-change (start end)
+  "Refuse a change outside the active editable result between START and END."
+  (unless agentedit-review--changing-projection
+    (unless (and agentedit-review--session
+                 (equal agentedit-review--projection-role "edited")
+                 (eq (agentedit-review-session-state agentedit-review--session) 'editing)
+                 agentedit-review--fragment-start agentedit-review--fragment-end
+                 (<= agentedit-review--fragment-start start)
+                 (<= end agentedit-review--fragment-end))
+      (user-error "Only the active result fragment is editable; use C-c e"))))
+
+(defun agentedit-review--projection-after-change (&rest _ignored)
+  "Keep active-fragment annotations accurate while the result is edited."
+  (when (and agentedit-review--session
+             (not agentedit-review--changing-projection)
+             (eq (agentedit-review-session-state agentedit-review--session) 'editing))
+    (agentedit-review--decorate-fragment agentedit-review--session "edited")))
+
+(defun agentedit-review--projection-save-refused ()
+  "Explain why a display projection cannot be saved as source."
+  (interactive)
+  (user-error "AgentEdit projection: stage with C-c C-c, then A to apply; C-c l visits source"))
+
+(defun agentedit-review--native-mutation-refused ()
+  "Keep native Ediff mutations from changing AgentEdit pane roles or context."
+  (interactive)
+  (user-error "AgentEdit keeps fixed panes; use C-c o/p to seed, C-c e to edit"))
+
+(defun agentedit-review--install-context-keys ()
+  "Install AgentEdit commands in the current owned buffer's local map."
+  (use-local-map (copy-keymap (or (current-local-map) (make-sparse-keymap))))
+  (dolist (binding '(("C-c e" . agentedit-review-edit)
+                     ("C-c o" . agentedit-review-seed-original)
+                     ("C-c p" . agentedit-review-seed-proposed)
+                     ("C-c w" . agentedit-review-toggle-context)
+                     ("C-c l" . agentedit-review-report)
+                     ("C-c C-c" . agentedit-review-stage)
+                     ("C-c C-k" . agentedit-review-cancel-edit)))
+    (local-set-key (kbd (car binding)) (cdr binding))))
+
+(defun agentedit-review--decorate-fragment (session side)
+  "Label the active fragment in the current SESSION projection for SIDE."
+  (let* ((view (agentedit-review-session-view session))
+         (editing (eq (agentedit-review-session-state session) 'editing))
+         (result (equal side "edited"))
+         (draft (buffer-substring-no-properties
+                 agentedit-review--fragment-start agentedit-review--fragment-end))
+         (record (agentedit-review--current-record session))
+         (face (if result 'agentedit-review-proposed-label 'agentedit-review-original-label))
+         (scope (cond ((agentedit-review-session-full-context session) "full file")
+                      ((agentedit-review-view-fallback view) "full-file fallback")
+                      (t "paragraph"))))
+    (setq-local header-line-format
+                (list (propertize
+                       (if result
+                           (format " + RESULT · %s "
+                                   (if editing "EDITING"
+                                     (if (equal draft (agentedit-review-record-edited record))
+                                         "PROPOSED" "CUSTOM")))
+                         " − ORIGINAL ")
+                       'face face)
+                      (if (and result editing) "C-c C-c stage · C-c C-k cancel"
+                        (if result "· accept keeps this" "· reject keeps this"))
+                      (format " · %s" scope)
+                      (cond ((string-empty-p draft) " · empty fragment")
+                            ((not (string-match-p "[^ \t\r\n]" draft))
+                             (format " · whitespace only (%d characters)" (length draft)))
+                            (t ""))))
+    (when (overlayp agentedit-review--fragment-overlay)
+      (delete-overlay agentedit-review--fragment-overlay))
+    (setq agentedit-review--fragment-overlay
+          (make-overlay agentedit-review--fragment-start agentedit-review--fragment-end nil nil t))
+    (overlay-put agentedit-review--fragment-overlay 'before-string
+                 (propertize (if (string-empty-p draft) "[empty fragment]" "⟦") 'face face))
+    (overlay-put agentedit-review--fragment-overlay 'after-string (propertize "⟧" 'face face))
+    (remove-overlays nil nil 'agentedit-pending t)
+    (dolist (pending (agentedit-review-view-pending view))
+      (let* ((neighbor (car pending)) (start (cadr pending))
+             (position (- start (agentedit-review-view-offset view))))
+        (when (and result (>= start (agentedit-review-view-end view)))
+          (cl-incf position (- (length draft) (length (agentedit-review-record-original record)))))
+        (when (<= (point-min) position (point-max))
+          (let ((overlay (make-overlay position position)))
+            (overlay-put overlay 'agentedit-pending t)
+            (overlay-put overlay 'before-string
+                         (propertize (format "[pending %s] "
+                                             (agentedit-review--normalize-one-line
+                                              (agentedit-review-record-id neighbor)))
+                                     'face 'shadow))))))))
+
+(defun agentedit-review--fill-projection (session side)
+  "Replace this projection's display using SESSION's staged draft and SIDE."
+  (let* ((view (agentedit-review-session-view session))
+         (record (agentedit-review--current-record session))
+         (text (if (equal side "original") (agentedit-review-record-original record)
+                 (agentedit-review-session-draft session)))
+         (prefix (agentedit-review-view-prefix view))
+         (suffix (agentedit-review-view-suffix view))
+         (inhibit-read-only t) (agentedit-review--changing-projection t))
+    (remove-overlays nil nil 'agentedit-pending t)
+    (erase-buffer)
+    (insert prefix text suffix)
+    (setq agentedit-review--fragment-start (copy-marker (1+ (length prefix)))
+          agentedit-review--fragment-end (copy-marker (+ 1 (length prefix) (length text)) t)
+          buffer-undo-list nil)
+    (set-buffer-modified-p nil)
+    (goto-char agentedit-review--fragment-start)
+    (agentedit-review--decorate-fragment session side)))
+
 (defun agentedit-review--make-projection (session side text id)
   "Create a read-only projection owned by SESSION for SIDE from TEXT and ID."
   (let ((buffer (generate-new-buffer (agentedit-review--temporary-name side id))))
@@ -597,6 +1133,15 @@ Legacy calls retain their control-word origin semantics."
                     (append header-line-format
                             (list (if (string-empty-p text) " · empty"
                                     (format " · whitespace only (%d characters)" (length text)))))))
+      (when (and session (agentedit-review-session-view session))
+        (agentedit-review--copy-text-settings
+         (agentedit-review--record-source (agentedit-review--current-record session)))
+        (agentedit-review--install-context-keys)
+        (local-set-key [remap save-buffer] #'agentedit-review--projection-save-refused)
+        (local-set-key [remap write-file] #'agentedit-review--projection-save-refused)
+        (agentedit-review--fill-projection session side)
+        (add-hook 'before-change-functions #'agentedit-review--projection-before-change nil t)
+      (add-hook 'after-change-functions #'agentedit-review--projection-after-change nil t))
       (add-hook 'kill-buffer-hook #'agentedit-review--projection-killed nil t))
     buffer))
 
@@ -604,6 +1149,240 @@ Legacy calls retain their control-word origin semantics."
   "Return SESSION's current record, or nil after the queue."
   (nth (agentedit-review-session-index session)
        (agentedit-review-session-records session)))
+
+(defun agentedit-review--require-review (&optional editing)
+  "Return the active contextual session; allow EDITING when non-nil."
+  (let ((session agentedit-review--session))
+    (unless (and session (agentedit-review-session-view session)
+                 (memq (agentedit-review-session-state session)
+                       (if editing '(reviewing editing) '(reviewing))))
+      (user-error "Stage with C-c C-c or cancel with C-c C-k before deciding or changing context"))
+    session))
+
+(defun agentedit-review--live-draft (session)
+  "Read SESSION's exact live result fragment, independent of selected window."
+  (let ((buffer (agentedit-review-session-projection-b session)))
+    (unless (buffer-live-p buffer) (error "Result projection was killed"))
+    (with-current-buffer buffer
+      (unless (and (markerp agentedit-review--fragment-start)
+                   (markerp agentedit-review--fragment-end)
+                   (eq (marker-buffer agentedit-review--fragment-start) buffer)
+                   (eq (marker-buffer agentedit-review--fragment-end) buffer)
+                   (<= (point-min) agentedit-review--fragment-start
+                       agentedit-review--fragment-end (point-max)))
+        (error "Result fragment boundaries changed"))
+      (buffer-substring-no-properties agentedit-review--fragment-start
+                                      agentedit-review--fragment-end))))
+
+(defun agentedit-review--validate-projections (session)
+  "Validate SESSION's fixed roles and all protected projection text."
+  (agentedit-review--check-source-snapshot session)
+  (let* ((view (agentedit-review-session-view session))
+         (a (agentedit-review-session-projection-a session))
+         (b (agentedit-review-session-projection-b session))
+         (control (agentedit-review-session-control session))
+         (record (agentedit-review--current-record session))
+         (prefix (agentedit-review-view-prefix view))
+         (suffix (agentedit-review-view-suffix view)))
+    (unless (and (buffer-live-p a) (buffer-live-p b) (buffer-live-p control))
+      (error "An AgentEdit comparison buffer was killed"))
+    (with-current-buffer control
+      (unless (and (eq ediff-buffer-A a) (eq ediff-buffer-B b))
+        (error "Ediff pane roles changed; restart review")))
+    (with-current-buffer a
+      (unless (and (not (buffer-narrowed-p))
+                   (equal (buffer-substring-no-properties (point-min) (point-max))
+                          (concat prefix (agentedit-review-record-original record) suffix)))
+        (error "Original projection changed; no decision applied")))
+    (with-current-buffer b
+      (let ((live (agentedit-review--live-draft session)))
+        (when (and (not (eq (agentedit-review-session-state session) 'editing))
+                   (not (equal live (agentedit-review-session-draft session))))
+          (error "Result changed outside editing; use C-c e")))
+      (unless (and (not (buffer-narrowed-p))
+                   (= agentedit-review--fragment-start (1+ (length prefix)))
+                   (equal prefix (buffer-substring-no-properties
+                                  (point-min) agentedit-review--fragment-start))
+                   (equal suffix (buffer-substring-no-properties
+                                  agentedit-review--fragment-end (point-max))))
+        (error "Protected result context changed; no decision applied")))))
+
+(defun agentedit-review--preserve-draft (session &optional snapshot)
+  "Preserve SESSION's changed live draft before any failed teardown.
+This is idempotent and runs synchronously while killed panes are still live."
+  (let* ((record (agentedit-review--current-record session))
+         (draft (or snapshot (ignore-errors (agentedit-review--live-draft session))
+                    (agentedit-review-session-draft session))))
+    (when (and record (stringp draft)
+               (not (agentedit-review-session-applied-decision session))
+               (not (eq (agentedit-review-session-completed-decision session) 'skip))
+               (not (eq (agentedit-review-session-state session) 'aborting))
+               (not (equal draft (agentedit-review-record-edited record)))
+               (not (buffer-live-p (agentedit-review-session-recovery session))))
+      (let ((buffer (generate-new-buffer
+                     (format "*AgentEdit recovered %s*"
+                             (agentedit-review--normalize-one-line
+                              (agentedit-review-record-id record))))))
+        (with-current-buffer buffer
+          (insert draft)
+          (buffer-enable-undo)
+          (setq-local header-line-format
+                      (list "Recovered AgentEdit draft · "
+                            (agentedit-review--normalize-one-line
+                             (agentedit-review-record-id record))
+                            " · inspect source before applying"))
+          (goto-char (point-min)))
+        (setf (agentedit-review-session-recovery session) buffer)))))
+
+(defun agentedit-review--draft-failed (session problem)
+  "Stop SESSION after draft or refresh PROBLEM without losing live text."
+  (agentedit-review--preserve-draft session)
+  (setf (agentedit-review-session-last-error session) (error-message-string problem))
+  (agentedit-review--note-current-file-error session (error-message-string problem))
+  (agentedit-review--transition session
+                                (if (eq (car problem) 'agentedit-review-stale) 'stale 'failed))
+  (condition-case nil
+      (let ((control (agentedit-review-session-control session)))
+        (if (buffer-live-p control)
+            (with-current-buffer control (agentedit-review--ediff-really-quit))
+          (agentedit-review--force-terminal-cleanup session)))
+    ((error quit) (agentedit-review--force-terminal-cleanup session))))
+
+(defun agentedit-review--refresh (session &optional context)
+  "Refresh differences in SESSION without ending Ediff.
+With CONTEXT, reconstruct both panes from the cached baseline."
+  (message "AgentEdit: recomputing comparison...")
+  (when context
+    (agentedit-review--select-context session)
+    (dolist (entry (list (cons (agentedit-review-session-projection-a session) "original")
+                         (cons (agentedit-review-session-projection-b session) "edited")))
+      (with-current-buffer (car entry)
+        (agentedit-review--fill-projection session (cdr entry)))))
+  ;; Ediff's window setup expects the control window to be selected, not
+  ;; merely current-buffer.  Staging is also callable from either pane.
+  (pop-to-buffer (agentedit-review-session-control session))
+  (ediff-update-diffs)
+  (with-current-buffer (agentedit-review-session-control session)
+    (agentedit-review--install-control-visuals))
+  (dolist (buffer (list (agentedit-review-session-projection-a session)
+                       (agentedit-review-session-projection-b session)))
+    (with-current-buffer buffer
+      (agentedit-review--decorate-fragment session agentedit-review--projection-role)
+      (goto-char agentedit-review--fragment-start)
+      (let ((window (get-buffer-window buffer t)))
+        (when window
+          (set-window-point window (point))
+          (with-selected-window window (recenter))))))
+  (force-mode-line-update t))
+
+;;;###autoload
+(defun agentedit-review-edit ()
+  "Edit only the active result fragment.
+C-c C-c stages it without applying or saving; C-c C-k cancels this transaction."
+  (interactive)
+  (let ((session (agentedit-review--require-review t)))
+    (condition-case problem
+        (progn
+          (agentedit-review--validate-projections session)
+          (unless (eq (agentedit-review-session-state session) 'editing)
+            (setf (agentedit-review-session-edit-entry session)
+                  (agentedit-review-session-draft session))
+            (agentedit-review--transition session 'editing))
+          (pop-to-buffer (agentedit-review-session-projection-b session))
+          (setq buffer-read-only nil)
+          (buffer-enable-undo)
+          (goto-char agentedit-review--fragment-start)
+          (agentedit-review--decorate-fragment session "edited")
+          (force-mode-line-update t)
+          (message "Editing result fragment; context is read-only. C-c C-c stage, C-c C-k cancel."))
+      ((error quit) (agentedit-review--draft-failed session problem)))))
+
+(defun agentedit-review--seed (original)
+  "Seed the live fragment with the ORIGINAL or proposed text, preserving entry."
+  (let* ((session (agentedit-review--require-review t))
+         (record (agentedit-review--current-record session))
+         (live (agentedit-review--live-draft session)))
+    (condition-case problem
+        (progn
+          (agentedit-review-edit)
+          (when (eq (agentedit-review-session-state session) 'editing)
+            (with-current-buffer (agentedit-review-session-projection-b session)
+              (undo-boundary)
+              (atomic-change-group
+                (delete-region agentedit-review--fragment-start agentedit-review--fragment-end)
+                (goto-char agentedit-review--fragment-start)
+                (insert (if original (agentedit-review-record-original record)
+                          (agentedit-review-record-edited record))))
+              (undo-boundary)
+              (goto-char agentedit-review--fragment-start)
+              (agentedit-review--decorate-fragment session "edited"))))
+      ((error quit)
+       (agentedit-review--preserve-draft session live)
+       (agentedit-review--draft-failed session problem)))))
+
+(defun agentedit-review-seed-original ()
+  "Start or continue editing from the original text; do not apply or save."
+  (interactive)
+  (agentedit-review--seed t))
+
+(defun agentedit-review-seed-proposed ()
+  "Start or continue editing from the proposal; cancel restores the entry draft."
+  (interactive)
+  (agentedit-review--seed nil))
+
+(defun agentedit-review--end-edit (cancel)
+  "Stage the live draft, or CANCEL to the snapshot from editing entry."
+  (let* ((session (agentedit-review--require-review t))
+         (live (agentedit-review--live-draft session)))
+    (unless (eq (agentedit-review-session-state session) 'editing)
+      (user-error "No edit transaction is active; use C-c e"))
+    (condition-case problem
+        (progn
+          (agentedit-review--validate-projections session)
+          (let ((draft (if cancel (agentedit-review-session-edit-entry session)
+                         (agentedit-review--live-draft session))))
+            ;; Keep live recovery material until refresh has succeeded.
+            (setf (agentedit-review-session-draft session) draft)
+            (when cancel
+              (with-current-buffer (agentedit-review-session-projection-b session)
+                (agentedit-review--fill-projection session "edited")))
+            (agentedit-review--refresh session)
+            (agentedit-review--transition session 'reviewing)
+            (setf (agentedit-review-session-edit-entry session) nil)
+            (with-current-buffer (agentedit-review-session-projection-b session)
+              (setq buffer-read-only t)
+              (set-buffer-modified-p nil)
+              (agentedit-review--decorate-fragment session "edited"))
+            (pop-to-buffer (agentedit-review-session-control session))
+            (force-mode-line-update t)
+            (message "AgentEdit: %s; no source change. A applies the result."
+                     (if cancel "draft restored" "draft staged"))))
+      ((error quit)
+       (agentedit-review--preserve-draft session live)
+       (agentedit-review--draft-failed session problem)))))
+
+(defun agentedit-review-stage ()
+  "Stage the active live draft and refresh Ediff, without applying or saving."
+  (interactive)
+  (agentedit-review--end-edit nil))
+
+(defun agentedit-review-cancel-edit ()
+  "Restore the draft from entry into editing, including changes made by seeds."
+  (interactive)
+  (agentedit-review--end-edit t))
+
+(defun agentedit-review-toggle-context ()
+  "Toggle paragraph and full current-source-file context, retaining the draft."
+  (interactive)
+  (let ((session (agentedit-review--require-review)))
+    (condition-case problem
+        (progn
+          (agentedit-review--validate-projections session)
+          (setf (agentedit-review-session-full-context session)
+                (not (agentedit-review-session-full-context session)))
+          (agentedit-review--refresh session t)
+          (pop-to-buffer (agentedit-review-session-control session)))
+      ((error quit) (agentedit-review--draft-failed session problem)))))
 
 (defun agentedit-review--counts (session)
   "Return SESSION counts as a display string."
@@ -654,19 +1433,30 @@ Legacy calls retain their control-word origin semantics."
       agentedit-review--header-location)))
 
 (defun agentedit-review--mode-line-format ()
-  "Keep decision keys and unsaved status ahead of counts at narrow widths."
+  "Prioritize editing state, save policy, and actions at narrow widths."
   (let* ((session agentedit-review--session)
          (width (max 20 (window-body-width)))
-         (controls (if (< width 60) " A accept R reject S skip q quit" " A accept  R reject  S skip  q quit "))
-         (counts (concat "  " (agentedit-review--counts session)))
-         (label (agentedit-review--unsaved-label session))
-         (status (concat " " (if (< width 60) (car (last (split-string label))) label))))
-    (setq agentedit-review--mode-controls (propertize controls 'face 'mode-line-emphasis)
+         (editing (eq (agentedit-review-session-state session) 'editing))
+         (record (agentedit-review--current-record session))
+         (file (and record (agentedit-review--file-state session (agentedit-review--record-source record))))
+         (policy (if (agentedit-review-session-auto-save session) "AUTO" "MANUAL"))
+         (state (cond (editing "EDITING")
+                      ((and record (agentedit-review-session-draft session)
+                            (not (equal (agentedit-review-session-draft session)
+                                        (agentedit-review-record-edited record)))) "CUSTOM")
+                      (t "PROPOSED")))
+         (saved (if (and file (eq (agentedit-review-file-save-status file) 'saved)) "saved" "unsaved"))
+         (controls (if editing
+                       (format "EDIT %s C-c C-c stage C-c C-k cancel" policy)
+                     (format "%s %s %s A/R/S q" state policy saved)))
+         (hints " · C-c e edit · C-c w context · C-c l report")
+         (counts (concat " · " (agentedit-review--counts session))))
+    (setq agentedit-review--mode-controls
+          (propertize (agentedit-review--truncate controls width) 'face 'mode-line-emphasis)
           agentedit-review--mode-status
-          (if (<= (+ (string-width controls) (string-width status)) width)
-              (propertize status 'face 'shadow) "")
+          (if (<= (+ (string-width controls) (string-width hints)) width) hints "")
           agentedit-review--mode-counts
-          (if (<= (+ (string-width controls) (string-width status) (string-width counts)) width)
+          (if (<= (+ (string-width controls) (string-width hints) (string-width counts)) width)
               counts ""))
     '(agentedit-review--mode-controls agentedit-review--mode-status agentedit-review--mode-counts)))
 
@@ -693,6 +1483,9 @@ Legacy calls retain their control-word origin semantics."
   (local-set-key (kbd "R") #'agentedit-review--reject)
   (local-set-key (kbd "S") #'agentedit-review--skip)
   (local-set-key (kbd "q") #'agentedit-review--quit)
+  (agentedit-review--install-context-keys)
+  (dolist (key '("a" "b" "r" "w" "~"))
+    (local-set-key (kbd key) #'agentedit-review--native-mutation-refused))
   (setq-local header-line-format '((:eval (agentedit-review--header-format))))
   (setq-local mode-line-format '((:eval (agentedit-review--mode-line-format))))
   (add-hook 'ediff-cleanup-hook #'agentedit-review--cleanup nil t)
@@ -726,47 +1519,63 @@ Legacy calls retain their control-word origin semantics."
 
 (defun agentedit-review--open-current (session)
   "Open SESSION's current record in a new Ediff pair."
+  (when (and (memq (agentedit-review-session-state session) '(starting deciding))
+             (cl-every (lambda (key) (eq (gethash key agentedit-review--sessions) session))
+                       (agentedit-review-session-lock-keys session)))
+  (setf (agentedit-review-session-timer session) nil)
   (let* ((was-starting
           (eq (agentedit-review-session-state session) 'starting))
          (record (agentedit-review--current-record session))
          (id (agentedit-review-record-id record))
-         (buffer-a (agentedit-review--make-projection
-                    session "original" (agentedit-review-record-original record) id))
-         buffer-b
+         buffer-a buffer-b
          (startup
           (lambda ()
             (setf (agentedit-review-session-control session) (current-buffer))
             (agentedit-review--install-control session record)
             (agentedit-review--install-control-visuals)
             (agentedit-review--transition session 'reviewing)
-            (agentedit-review--emit-announcement session)
-            (setf (agentedit-review-session-applied-decision session) nil
-                  (agentedit-review-session-completed-decision session) nil
-                  (agentedit-review-session-completed-record session) nil))))
-    (setf (agentedit-review-session-projection-a session) buffer-a
-          (agentedit-review-session-cleanup-complete session) nil)
+            (agentedit-review--emit-announcement session))))
+    ;; The previous record is already accounted for before continuation.  A
+    ;; failure while building this view belongs to the new owning file.
+    (setf (agentedit-review-session-applied-decision session) nil
+          (agentedit-review-session-completed-decision session) nil
+          (agentedit-review-session-completed-record session) nil)
     (condition-case error-data
         (let ((ediff-startup-hook (cons startup ediff-startup-hook)))
+          (message "AgentEdit: building contextual comparison...")
+          (setf (agentedit-review-session-view session) nil
+                (agentedit-review-session-draft session) (agentedit-review-record-edited record)
+                (agentedit-review-session-edit-entry session) nil
+                (agentedit-review-session-cleanup-complete session) nil)
+          (setf (agentedit-review-session-view session) (agentedit-review--build-view session))
+          (agentedit-review--select-context session)
+          (setq buffer-a (agentedit-review--make-projection
+                          session "original" (agentedit-review-record-original record) id))
+          (setf (agentedit-review-session-projection-a session) buffer-a)
           (setq buffer-b
                 (agentedit-review--make-projection
                  session "edited" (agentedit-review-record-edited record) id))
           (setf (agentedit-review-session-projection-b session) buffer-b)
           (ediff-buffers buffer-a buffer-b))
-      (error
+      ((error quit)
        (setf (agentedit-review-session-pending-announcement session) nil
              (agentedit-review-session-last-error session)
              (format "could not start Ediff: %s"
                      (error-message-string error-data)))
+       (agentedit-review--note-current-file-error
+        session (agentedit-review-session-last-error session))
        (unless (agentedit-review--terminal-state-p
                 (agentedit-review-session-state session))
          (agentedit-review--transition session 'failed))
        (agentedit-review--force-terminal-cleanup session)
        (when was-starting
          (user-error "AgentEdit could not start Ediff: %s"
-                     (error-message-string error-data)))))))
+                     (error-message-string error-data))))))))
 
 (defun agentedit-review--release (session)
   "Idempotently release temporary resources and terminal lock for SESSION."
+  (when (memq (agentedit-review-session-state session) '(failed stale partial-failure))
+    (agentedit-review--preserve-draft session))
   (unless (agentedit-review-session-cleanup-in-progress session)
     (setf (agentedit-review-session-cleanup-in-progress session) t)
     (unwind-protect
@@ -779,6 +1588,11 @@ Legacy calls retain their control-word origin semantics."
             (agentedit-review-session-cleanup-in-progress session) nil)))
   (when (agentedit-review--terminal-state-p
          (agentedit-review-session-state session))
+    (when (timerp (agentedit-review-session-timer session))
+      (cancel-timer (agentedit-review-session-timer session)))
+    (setf (agentedit-review-session-timer session) nil
+          (agentedit-review-session-view session) nil)
+    (agentedit-review--render-report session)
     (dolist (key (or (agentedit-review-session-lock-keys session)
                      (and (agentedit-review-session-lock-key session)
                           (list (agentedit-review-session-lock-key session)))))
@@ -793,7 +1607,12 @@ Legacy calls retain their control-word origin semantics."
     (pcase state
       ('finished
        (format "AgentEdit review complete: %s; %s%s."
-               counts (agentedit-review--unsaved-label session)
+               counts
+               (format "%d files saved; %s"
+                       (cl-count 'saved (agentedit-review-session-files session)
+                                 :key #'agentedit-review-file-save-status)
+                       (if (agentedit-review-session-auto-save session)
+                           "see report for current file status" "manual save mode"))
                (if (> (agentedit-review-session-skipped session) 0)
                    "; skipped markers remain unresolved" "")))
       ('aborting
@@ -816,15 +1635,19 @@ Legacy calls retain their control-word origin semantics."
                            (agentedit-review-session-last-error session))
                  "")))
       ('partial-failure
-       (format "%s applied, but Ediff teardown failed: %s; %s; %s and normally undoable."
-               (capitalize
-                (symbol-name
-                 (or (agentedit-review-session-applied-decision session)
-                     'decision)))
+       (format "%s: %s; %s; %s. See M-x agentedit-review-report."
+               (cond ((agentedit-review-session-save-confirmed session) "Saved; review stopped")
+                     ((not (agentedit-review-session-auto-save session)) "Applied; unsaved (manual mode); review stopped")
+                     (t "Applied; save not confirmed"))
                (or (agentedit-review-session-last-error session)
                    "unknown error")
                counts
-               (agentedit-review--unsaved-label session)))
+               (let* ((completed (agentedit-review-session-completed-record session))
+                      (file (and completed (agentedit-review--file-state
+                                            session (agentedit-review--record-source completed)))))
+                 (if file (format "%s: %s" (agentedit-review-file-path file)
+                                  (agentedit-review--file-save-label file))
+                   "see per-file report"))))
       (_
        (if (eq (agentedit-review-session-completed-decision session) 'skip)
            (format "Skip recorded for %s, but Ediff teardown failed: %s. No source text changed; %s."
@@ -844,32 +1667,55 @@ Legacy calls retain their control-word origin semantics."
                  counts))))))
 
 (defun agentedit-review--cleanup ()
-  "Primary Ediff cleanup hook for the current AgentEdit record."
+  "Release this record's panes; normal advancement waits for native teardown.
+If Ediff is quit outside AgentEdit controls, stop the pass and rescue its draft."
   (let ((session agentedit-review--session))
-    (when (and session
-               (not (agentedit-review-session-cleanup-complete session)))
-      (setf (agentedit-review-session-cleanup-complete session) t)
-      (when (and (eq (agentedit-review-session-state session) 'deciding)
-                 (eq (agentedit-review-session-pending-action session) 'finish))
-        (setf (agentedit-review-session-pending-action session) nil)
-        (agentedit-review--transition session 'finished))
-      (when (eq (agentedit-review-session-pending-action session) 'continue)
-        (setf (agentedit-review-session-pending-action session) nil))
-      (agentedit-review--release session)
-      (if (agentedit-review--terminal-state-p
-           (agentedit-review-session-state session))
-          (let ((message-text (agentedit-review--terminal-message session)))
-            (setf (agentedit-review-session-pending-announcement session) nil)
-            (run-at-time 0 nil #'agentedit-review--finish-terminal
-                         session message-text))
-        (run-at-time 0 nil #'agentedit-review--open-current session)))))
+    (when (and session (not (agentedit-review-session-cleanup-complete session)))
+      (let ((external (not (agentedit-review-session-teardown-in-progress session))))
+        (when external
+          (setf (agentedit-review-session-last-error session)
+                "Ediff was closed outside AgentEdit controls; review stopped"
+                (agentedit-review-session-pending-action session) nil
+                (agentedit-review-session-pending-announcement session) nil)
+          (agentedit-review--note-current-file-error
+           session (agentedit-review-session-last-error session))
+          (unless (agentedit-review--terminal-state-p (agentedit-review-session-state session))
+            (agentedit-review--transition
+             session (if (agentedit-review-session-applied-decision session)
+                         'partial-failure 'failed)))
+          (agentedit-review--preserve-draft session))
+        (setf (agentedit-review-session-cleanup-complete session) t)
+        (agentedit-review--release session)
+        (when external
+          (setf (agentedit-review-session-timer session)
+                (run-at-time 0 nil #'agentedit-review--finish-external-quit session)))))))
+
+(defun agentedit-review--finish-external-quit (session)
+  "Show terminal status after an externally invoked native Ediff quit."
+  (setf (agentedit-review-session-timer session) nil)
+  (when (and (agentedit-review--terminal-state-p (agentedit-review-session-state session))
+             (cl-every (lambda (key) (not (gethash key agentedit-review--sessions)))
+                       (agentedit-review-session-lock-keys session)))
+    (agentedit-review--finish-terminal session (agentedit-review--terminal-message session))))
+
+(defun agentedit-review--after-teardown (session)
+  "Advance SESSION only after all native Ediff quit hooks returned successfully."
+  (when (eq (agentedit-review-session-pending-action session) 'finish)
+    (agentedit-review--transition session 'finished))
+  (setf (agentedit-review-session-pending-action session) nil)
+  (if (agentedit-review--terminal-state-p (agentedit-review-session-state session))
+      (progn
+        (agentedit-review--release session)
+        (agentedit-review--finish-terminal session (agentedit-review--terminal-message session)))
+    (setf (agentedit-review-session-timer session)
+          (run-at-time 0 nil #'agentedit-review--open-current session))))
 
 (defun agentedit-review--finish-terminal (session message-text)
   "Return to SESSION's source and show MESSAGE-TEXT after Ediff cleanup."
-  (let* ((record (agentedit-review--current-record session))
-         (source (if (and (eq (agentedit-review-session-state session) 'stale)
-                          record)
-                     (agentedit-review--record-source record)
+  (let* ((record (if (agentedit-review-session-applied-decision session)
+                     (agentedit-review-session-completed-record session)
+                   (agentedit-review--current-record session)))
+         (source (if record (agentedit-review--record-source record)
                    (agentedit-review-session-source session))))
     (when (buffer-live-p source)
       (pop-to-buffer source)
@@ -878,7 +1724,7 @@ Legacy calls retain their control-word origin semantics."
           (when (and marker (marker-position marker))
             (goto-char marker)
             (recenter)))))
-    (message "%s" message-text)))
+    (message "%s  M-x agentedit-review-report for per-file results." message-text)))
 
 (defun agentedit-review--control-killed ()
   "Fallback cleanup when an AgentEdit control buffer dies abnormally."
@@ -889,8 +1735,10 @@ Legacy calls retain their control-word origin semantics."
                (agentedit-review-session-state session))
         (setf (agentedit-review-session-last-error session)
               "control buffer was killed")
+        (agentedit-review--note-current-file-error session "control buffer was killed")
         (pcase (agentedit-review-session-state session)
           ('reviewing (agentedit-review--transition session 'failed))
+          ('editing (agentedit-review--transition session 'failed))
           ('starting (agentedit-review--transition session 'failed))
           ('deciding
            (agentedit-review--transition
@@ -907,15 +1755,19 @@ Legacy calls retain their control-word origin semantics."
                (not (agentedit-review-session-cleanup-in-progress session))
                (not (agentedit-review--terminal-state-p
                      (agentedit-review-session-state session))))
+      (agentedit-review--preserve-draft session)
       (setf (agentedit-review-session-last-error session)
             (format "%s projection was killed"
                     (or agentedit-review--projection-role "review")))
+      (agentedit-review--note-current-file-error
+       session (agentedit-review-session-last-error session))
       (agentedit-review--transition
        session
        (if (agentedit-review-session-applied-decision session)
            'partial-failure
          'failed))
-      (run-at-time 0 nil #'agentedit-review--abort-after-projection-kill session))))
+      (setf (agentedit-review-session-timer session)
+            (run-at-time 0 nil #'agentedit-review--abort-after-projection-kill session)))))
 
 (defun agentedit-review--abort-after-projection-kill (session)
   "Tear down SESSION after an externally killed projection."
@@ -924,19 +1776,27 @@ Legacy calls retain their control-word origin semantics."
         (with-current-buffer control
           (condition-case error-data
               (agentedit-review--ediff-really-quit)
-            (error
+            ((error quit)
              (setf (agentedit-review-session-last-error session)
                    (format "%s; Ediff cleanup failed: %s"
                            (or (agentedit-review-session-last-error session)
                                "projection was killed")
                            (error-message-string error-data)))
+             (agentedit-review--note-current-file-error
+              session (agentedit-review-session-last-error session))
              (agentedit-review--force-terminal-cleanup session))))
       (agentedit-review--release session))))
 
 (defun agentedit-review--ediff-really-quit ()
-  "Quit the current AgentEdit Ediff session without prompting."
+  "Quit the current AgentEdit Ediff session, then arrange safe advancement."
   (agentedit-review--check-ediff-compatibility)
-  (ediff-really-quit nil))
+  (let ((session agentedit-review--session))
+    (setf (agentedit-review-session-teardown-in-progress session) t)
+    (unwind-protect
+        (progn
+          (ediff-really-quit nil)
+          (agentedit-review--after-teardown session))
+      (setf (agentedit-review-session-teardown-in-progress session) nil))))
 
 (defun agentedit-review--force-terminal-cleanup (session)
   "Release SESSION after Ediff cannot complete its own teardown."
@@ -945,11 +1805,9 @@ Legacy calls retain their control-word origin semantics."
   (agentedit-review--release session)
   (let ((control (agentedit-review-session-control session)))
     (when (buffer-live-p control)
-      (with-current-buffer control
-        (setf (agentedit-review-session-cleanup-complete session) t))
+      (setf (agentedit-review-session-cleanup-complete session) t)
       (kill-buffer control)))
-  (run-at-time 0 nil #'agentedit-review--finish-terminal
-               session (agentedit-review--terminal-message session)))
+  (agentedit-review--finish-terminal session (agentedit-review--terminal-message session)))
 
 (defun agentedit-review--source-ready (record)
   "Signal unless RECORD's source remains safe to mutate."
@@ -1069,85 +1927,98 @@ RECORD is the record whose decision just completed."
             (agentedit-review--normalize-one-line
              (agentedit-review-record-reason next)))))
 
+(defun agentedit-review--decision-failed (session record problem)
+  "Stop SESSION at RECORD after PROBLEM, retaining actual application/save facts."
+  (let ((file (agentedit-review--file-state session (agentedit-review--record-source record))))
+    (when file (setf (agentedit-review-file-error file) (error-message-string problem))))
+  ;; A late Ediff hook may fail after its cleanup hook has already run.
+  ;; Rescue describes the completed operation, even from a terminal state.
+  (setf (agentedit-review-session-state session)
+        (cond ((agentedit-review-session-applied-decision session) 'partial-failure)
+              ((eq (car problem) 'agentedit-review-stale) 'stale)
+              (t 'failed))
+        (agentedit-review-session-last-error session) (error-message-string problem)
+        (agentedit-review-session-pending-action session) nil
+        (agentedit-review-session-pending-announcement session) nil)
+  (condition-case cleanup-problem
+      (let ((control (agentedit-review-session-control session)))
+        (if (and (buffer-live-p control)
+                 (not (agentedit-review-session-cleanup-complete session)))
+            (with-current-buffer control (agentedit-review--ediff-really-quit))
+          (agentedit-review--force-terminal-cleanup session)))
+    ((error quit)
+     (setf (agentedit-review-session-last-error session)
+           (format "%s; Ediff cleanup failed: %s"
+                   (error-message-string problem) (error-message-string cleanup-problem)))
+     (agentedit-review--note-current-file-error
+      session (agentedit-review-session-last-error session))
+     (agentedit-review--force-terminal-cleanup session))))
+
+(defun agentedit-review--custom-draft-p (session)
+  "Return non-nil if SESSION has a staged or live custom result."
+  (let ((record (agentedit-review--current-record session)))
+    (and record (agentedit-review-session-view session)
+         (not (equal (if (eq (agentedit-review-session-state session) 'editing)
+                         (agentedit-review--live-draft session)
+                       (agentedit-review-session-draft session))
+                     (agentedit-review-record-edited record))))))
+
 (defun agentedit-review--decision (kind)
-  "Apply the current AgentEdit decision KIND and advance without saving."
+  "Apply KIND once, verify saving if enabled, then advance after teardown."
   (let* ((session agentedit-review--session)
-         (record (and session (agentedit-review--current-record session)))
-         (mutated nil))
+         (record (and session (agentedit-review--current-record session))))
     (unless (memq kind '(accept reject skip))
       (error "Unknown AgentEdit decision: %s" kind))
-    (unless (and session
-                 (eq (agentedit-review-session-state session) 'reviewing))
-      (user-error "No AgentEdit decision is currently available"))
-    (agentedit-review--transition session 'deciding)
-    (setf (agentedit-review-session-applied-decision session) nil
-          (agentedit-review-session-completed-decision session) nil
-          (agentedit-review-session-completed-record session) nil)
-    (condition-case error-data
-        (progn
-          (agentedit-review--check-ediff-compatibility)
-          (pcase kind
-            ('accept
-             (agentedit-review--replace-current
-              session (agentedit-review-record-edited record))
-             (setq mutated t)
-             (setf (agentedit-review-session-applied-decision session) 'accept)
-             (cl-incf (agentedit-review-session-accepted session)))
-            ('reject
-             (agentedit-review--replace-current
-              session (agentedit-review-record-original record))
-             (setq mutated t)
-             (setf (agentedit-review-session-applied-decision session) 'reject)
-             (cl-incf (agentedit-review-session-rejected session)))
-            ('skip
-             (cl-incf (agentedit-review-session-skipped session))))
-          (setf (agentedit-review-session-completed-decision session) kind
-                (agentedit-review-session-completed-record session) record)
-          (cl-incf (agentedit-review-session-index session))
-          (if (agentedit-review--current-record session)
-              (setf (agentedit-review-session-pending-action session) 'continue
-                    (agentedit-review-session-pending-announcement session)
-                    (agentedit-review--next-announcement
-                     session (capitalize (symbol-name kind)) record))
-            (setf (agentedit-review-session-pending-action session) 'finish))
-          (condition-case quit-error
-              (agentedit-review--ediff-really-quit)
-            (error
-             (setf (agentedit-review-session-last-error session)
-                   (error-message-string quit-error))
-             (agentedit-review--transition
-              session (if mutated 'partial-failure 'failed))
-             (agentedit-review--force-terminal-cleanup session))))
-      (agentedit-review-stale
-       (agentedit-review--transition session 'stale)
-       (setf (agentedit-review-session-pending-announcement session) nil)
-       (condition-case quit-error
-           (agentedit-review--ediff-really-quit)
-         (error
-          (setf (agentedit-review-session-last-error session)
-                (error-message-string quit-error))
-          (agentedit-review--force-terminal-cleanup session))))
-      (error
-       (agentedit-review--transition session 'failed)
-       (setf (agentedit-review-session-pending-announcement session) nil
-             (agentedit-review-session-last-error session)
-             (error-message-string error-data))
-       (condition-case quit-error
-           (agentedit-review--ediff-really-quit)
-         (error
-          (setf (agentedit-review-session-last-error session)
-                (format "%s; Ediff cleanup failed: %s"
-                        (error-message-string error-data)
-                        (error-message-string quit-error)))
-          (agentedit-review--force-terminal-cleanup session)))))))
+    (unless (and session (eq (agentedit-review-session-state session) 'reviewing))
+      (user-error "Stage with C-c C-c or cancel with C-c C-k before A/R/S"))
+    (when (or (not (and (eq kind 'skip) (agentedit-review--custom-draft-p session)))
+              (y-or-n-p "Discard custom draft and skip this record? "))
+      (agentedit-review--transition session 'deciding)
+      (setf (agentedit-review-session-applied-decision session) nil
+            (agentedit-review-session-save-confirmed session) nil
+            (agentedit-review-session-completed-decision session) nil
+            (agentedit-review-session-completed-record session) nil)
+      (condition-case problem
+          (let (expected)
+            (agentedit-review--check-ediff-compatibility)
+            (when (agentedit-review-session-view session)
+              (agentedit-review--validate-projections session))
+            (unless (eq kind 'skip)
+              (agentedit-review--save-preflight session record)
+              (let ((replacement (if (eq kind 'reject)
+                                     (agentedit-review-record-original record)
+                                   (if (agentedit-review-session-view session)
+                                       (agentedit-review-session-draft session)
+                                     (agentedit-review-record-edited record)))))
+                (setq expected (agentedit-review--expected-source record replacement))
+                (agentedit-review--replace-current session replacement))
+              (setf (agentedit-review-session-applied-decision session) kind))
+            (agentedit-review--record-decision session record kind)
+            (when (agentedit-review-session-applied-decision session)
+              (agentedit-review--save-decision session record expected))
+            (if (agentedit-review--current-record session)
+                (setf (agentedit-review-session-pending-action session) 'continue
+                      (agentedit-review-session-pending-announcement session)
+                      (agentedit-review--next-announcement
+                       session
+                       (format "%s; %s %s"
+                               (pcase kind ('accept "Accepted") ('reject "Rejected") (_ "Skipped"))
+                               (cond ((eq kind 'skip) "unchanged")
+                                     ((agentedit-review-session-save-confirmed session) "Saved")
+                                     (t "Applied; unsaved"))
+                               (agentedit-review--source-label (agentedit-review--record-source record)))
+                       record))
+              (setf (agentedit-review-session-pending-action session) 'finish))
+            (agentedit-review--ediff-really-quit))
+        ((error quit) (agentedit-review--decision-failed session record problem))))))
 
 (defun agentedit-review--accept ()
-  "Accept this proposal as one undoable source edit; do not save the buffer."
+  "Apply the staged result as one undoable edit, saving under session policy."
   (interactive)
   (agentedit-review--decision 'accept))
 
 (defun agentedit-review--reject ()
-  "Restore this proposal's original as one undoable edit; do not save."
+  "Restore this proposal's original, saving under session policy."
   (interactive)
   (agentedit-review--decision 'reject))
 
@@ -1157,25 +2028,28 @@ RECORD is the record whose decision just completed."
   (agentedit-review--decision 'skip))
 
 (defun agentedit-review--quit ()
-  "Stop this pass after confirmation; keep applied edits unsaved and undoable."
+  "Stop after confirmation; discard the current draft and keep applied edits."
   (interactive)
   (let ((session agentedit-review--session))
     (unless (and session
-                 (eq (agentedit-review-session-state session) 'reviewing))
+                 (memq (agentedit-review-session-state session) '(reviewing editing)))
       (user-error "No AgentEdit review is active"))
     (let ((remaining
            (- (length (agentedit-review-session-records session))
               (1+ (agentedit-review-session-index session)))))
       (when (y-or-n-p
-             (format "Stop review? %s stay applied; current and %d unvisited markers stay unchanged "
+             (format "Stop review? %s%s stay applied; current and %d unvisited markers stay unchanged "
+                     (if (agentedit-review--custom-draft-p session) "Discard custom draft. " "")
                      (agentedit-review--counts session) remaining))
         (agentedit-review--transition session 'aborting)
         (condition-case error-data
             (agentedit-review--ediff-really-quit)
-          (error
+          ((error quit)
            (setf (agentedit-review-session-last-error session)
                  (format "Ediff cleanup failed while stopping: %s"
                          (error-message-string error-data)))
+           (agentedit-review--note-current-file-error
+            session (agentedit-review-session-last-error session))
            (agentedit-review--force-terminal-cleanup session)))))))
 
 (defun agentedit-review--auctex-master-file ()
@@ -1259,13 +2133,20 @@ document compilation context."
   "Start a review from SOURCE across SOURCES and RECORDS.
 Show EMPTY-MESSAGE when RECORDS is empty."
   (let ((session (agentedit-review--make-session
-                  :source source :sources sources :records records)))
+                  :source source :sources sources :records records
+                  :auto-save (buffer-local-value 'agentedit-review-auto-save source))))
     (agentedit-review--lock-session session sources)
+    (setq agentedit-review--last-session session)
     (condition-case error-data
-        (if (null records)
+        (progn
+          (agentedit-review--initialize-files session)
+          (dolist (record records)
+            (agentedit-review--save-preflight session record))
+          (if (null records)
             (progn
               (agentedit-review--transition session 'finished)
               (agentedit-review--release session)
+              (agentedit-review--render-report session)
               (message "%s" empty-message))
           (let* ((record (agentedit-review--current-record session))
                  (record-source (agentedit-review--record-source record))
@@ -1274,18 +2155,22 @@ Show EMPTY-MESSAGE when RECORDS is empty."
                                    (agentedit-review--record-line record))))
             (setf (agentedit-review-session-pending-announcement session)
                   (format
-                   "AgentEdit 1 / %d %s · %s · Reason: %s · A accept, R reject, S skip, q quit"
+                   "AgentEdit 1 / %d %s · %s · Reason: %s · A accept, R reject, S skip, q quit · C-c e edit, C-c w context, C-c l report · %s"
                    (length records)
                    (agentedit-review--normalize-one-line
                     (agentedit-review-record-id record))
                    location
                    (agentedit-review--normalize-one-line
-                    (agentedit-review-record-reason record))))
-            (agentedit-review--open-current session)))
-      (error
+                    (agentedit-review-record-reason record))
+                   (if (agentedit-review-session-auto-save session)
+                       "A/R saves the WHOLE owning source, including existing unsaved edits"
+                     "MANUAL save: A/R leaves source buffers unsaved")))
+            (agentedit-review--open-current session))))
+      ((error quit)
        (unless (agentedit-review--terminal-state-p
                 (agentedit-review-session-state session))
          (agentedit-review--transition session 'failed))
+       (setf (agentedit-review-session-last-error session) (error-message-string error-data))
        (agentedit-review--release session)
        (signal (car error-data) (cdr error-data))))))
 
@@ -1308,8 +2193,8 @@ Show EMPTY-MESSAGE when RECORDS is empty."
 
 The command honors `TeX-master', parses the live master and its inputs with
 AUCTeX, and visits markers in document-file order.  If `TeX-master' is unset,
-it uses AUCTeX's native master prompt.  Decisions remain unsaved and undoable
-in the individual source buffers."
+it uses AUCTeX's native master prompt.  Decisions are undoable.  A/R save
+the individual source buffers by default."
   (agentedit-review--preflight)
   (unless (agentedit-review--auctex-project-capable-p)
     (user-error "Project review requires AUCTeX master and parser APIs"))
@@ -1349,7 +2234,9 @@ TeX mode, review the current buffer at or after point.  With prefix argument
 FILE-ONLY, review the current buffer at or after point in either mode family.
 
 Accept and reject each produce one undoable source edit.  Skip and quit leave
-undecided wrappers unchanged.  This command never saves source buffers."
+undecided wrappers unchanged.  With `agentedit-review-auto-save' non-nil (the
+default), A/R saves the entire owning source, including existing unsaved text.
+C-c e edits the result, C-c w expands context, and C-c l opens the report."
   (interactive "P")
   (if (or file-only (not (agentedit-review--auctex-mode-p)))
       (agentedit-review--review-buffer)

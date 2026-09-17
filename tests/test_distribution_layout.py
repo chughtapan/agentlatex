@@ -135,8 +135,14 @@ class DistributionLayoutTests(unittest.TestCase):
         self.assertIn(
             f"v{version} Reviewable AI-assisted edits", public_package
         )
-        self.assertIn(f"/v{version}/BOOTSTRAP.md", readme)
-        self.assertIn(f"/v{version}/latex/agentedit.sty", bootstrap)
+        # Setup URLs intentionally remain on the latest published tag until
+        # the new package version is tagged after this PR lands.
+        released = "0.4.0"
+        self.assertGreaterEqual(tuple(map(int, version.split("."))),
+                                tuple(map(int, released.split("."))))
+        self.assertIn(f"/v{released}/BOOTSTRAP.md", readme)
+        self.assertIn(f"/v{released}/latex/agentedit.sty", bootstrap)
+        self.assertIn(f"--ref v{released}", bootstrap)
 
 
 if __name__ == "__main__":

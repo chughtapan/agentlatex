@@ -1,7 +1,7 @@
 {
   "name": "agentedit-guard",
   "displayName": "AgentEdit Guard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Require AgentEdit provenance for LaTeX and BibTeX changes.",
   "author": {
     "name": "Tapan Chugh",

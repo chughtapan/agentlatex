@@ -21,7 +21,8 @@
        (latex-mode))
      (buffer-enable-undo)
      (goto-char (point-min))
-     ,@body))
+     (let ((agentedit-review-auto-save nil))
+       ,@body)))
 
 (defun agentedit-review-test--records (text &optional origin)
   "Parse and return records from TEXT beginning at ORIGIN."
@@ -295,7 +296,7 @@
         (control (generate-new-buffer " *AgentEdit announcement control*"))
         (session (agentedit-review--make-session
                   :state 'deciding :pending-action 'continue
-                  :pending-announcement "Accepted · Next record"))
+                  :teardown-in-progress t :pending-announcement "Accepted · Next record"))
         scheduled messages)
     (unwind-protect
         (progn
@@ -308,7 +309,9 @@
                        (lambda (_delay _repeat function &rest args)
                          (setq scheduled (cons function args)))))
               (agentedit-review--cleanup)
-              (agentedit-review--cleanup)))
+              (agentedit-review--cleanup)
+              (should-not scheduled)
+              (agentedit-review--after-teardown session)))
           (should (eq (car scheduled) #'agentedit-review--open-current))
           (cl-letf (((symbol-function 'agentedit-review--open-current)
                      (lambda (handoff-session)
@@ -879,6 +882,7 @@
         (ediff-window-setup-function #'ediff-setup-windows-plain)
         (ediff-split-window-function #'split-window-horizontally)
         (ediff-keep-variants t)
+        (agentedit-review-auto-save nil)
         (ediff-auto-refine 'off))
     (unwind-protect
         (with-current-buffer source
@@ -905,7 +909,7 @@
                 (should (assq 'ediff-fine-diff-A face-remapping-alist)))
               (with-current-buffer buffer-b
                 (should (string-match-p
-                         "\\+ PROPOSED.*accept keeps this"
+                         "\\+ RESULT.*PROPOSED.*accept keeps this"
                          (mapconcat #'substring-no-properties
                                     header-line-format "")))
                 (should (assq 'ediff-current-diff-B face-remapping-alist))
@@ -942,7 +946,8 @@
     (let ((source (generate-new-buffer " *AgentEdit layout source*"))
           (ediff-window-setup-function #'ediff-setup-windows-plain)
           (ediff-split-window-function split)
-          (ediff-keep-variants t))
+          (ediff-keep-variants t)
+        (agentedit-review-auto-save nil))
       (unwind-protect
           (with-current-buffer source
             (insert "\\agentedit{id}{Reason.}{old}{new}")
@@ -981,7 +986,8 @@
 (ert-deftest agentedit-review-quit-confirm-aborts-without-mutation ()
   (let ((source (generate-new-buffer " *AgentEdit quit source*"))
         (ediff-window-setup-function #'ediff-setup-windows-plain)
-        (ediff-keep-variants t))
+        (ediff-keep-variants t)
+        (agentedit-review-auto-save nil))
     (unwind-protect
         (with-current-buffer source
           (insert "\\agentedit{id}{Reason.}{old}{new}")
@@ -1007,7 +1013,8 @@
   (dolist (side '(a b))
     (let ((source (generate-new-buffer " *AgentEdit killed source*"))
           (ediff-window-setup-function #'ediff-setup-windows-plain)
-          (ediff-keep-variants t))
+          (ediff-keep-variants t)
+        (agentedit-review-auto-save nil))
       (unwind-protect
           (with-current-buffer source
             (insert "\\agentedit{id}{Reason.}{old}{new}")
@@ -1092,14 +1099,17 @@
     (unwind-protect
         (let ((session (agentedit-review--make-session
                         :source source :sources (list source)
-                        :state 'deciding :pending-action 'continue)))
+                        :state 'deciding :pending-action 'continue
+                        :teardown-in-progress t)))
           (agentedit-review--lock-session session (list source))
           (with-current-buffer control
             (setq-local agentedit-review--session session)
             (cl-letf (((symbol-function 'run-at-time)
                        (lambda (&rest args) (push args scheduled))))
               (agentedit-review--cleanup)
-              (agentedit-review--cleanup)))
+              (agentedit-review--cleanup)
+              (should-not scheduled)
+              (agentedit-review--after-teardown session)))
           (should (= (length scheduled) 1))
           (should (eq (gethash source agentedit-review--sessions) session))
           (setf (agentedit-review-session-state session) 'failed)
@@ -1126,7 +1136,7 @@
                    :source source :records (list record) :state 'stale))
          (unread-command-events '(?x ?y)))
     (kill-buffer source)
-    (should (equal (agentedit-review--finish-terminal session "stale") "stale"))
+    (should (string-prefix-p "stale" (agentedit-review--finish-terminal session "stale")))
     (should (equal unread-command-events '(?x ?y)))))
 
 (ert-deftest agentedit-review-last-decision-teardown-failure-is-partial ()
@@ -1252,4 +1262,6 @@
 ;;; agentedit-review-tests.el ends here
 
 (load (expand-file-name "agentedit-readable-tests.el"
+                        (file-name-directory (or load-file-name buffer-file-name))))
+(load (expand-file-name "agentedit-context-tests.el"
                         (file-name-directory (or load-file-name buffer-file-name))))

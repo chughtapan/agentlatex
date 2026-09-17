@@ -3,7 +3,7 @@
 Readable blocks keep each change as small as a word or a word fragment. The
 banners make it easy to find in a source editor; they do not make the whole
 paragraph one decision. This format is called `blocks-v1` and requires the
-0.4.0 guard and Emacs reviewer, or the manual procedure below.
+0.4.0 or newer guard and the current Emacs reviewer, or the manual procedure below.
 
 ## Find the original and proposal
 
@@ -56,19 +56,23 @@ Run `M-x agentedit-review`. In a review from point, placing point anywhere insid
 a frame includes that edit. AUCTeX reviews the master and its included files;
 `C-u M-x agentedit-review` limits either mode family to the current file.
 
-`A` accepts, `R` rejects, `S` defers, and `q` stops. The panes contain just the
-original and proposed argument interiors, so a word-sized edit stays word-sized.
-The reviewer removes the complete frame, preserves the right whitespace, and
-creates one undo step per decision. It does not save the source. Empty and
-whitespace-only panes have descriptive headers outside their text.
+`A` applies the staged result, `R` restores the original, `S` defers, and
+`q` stops. Each comparison shows the surrounding paragraph; `C-c w` toggles
+the whole current file. The result starts with the proposal. To change it,
+press `C-c e`, edit its active fragment, then `C-c C-c` to stage (or `C-c C-k`
+to cancel). `C-c o` and `C-c p` seed it from the original or proposal. Accept
+and reject each make one source undo step and, by default, save the whole owning
+file. Any pre-existing unsaved edits in that file are included. Set
+`agentedit-review-auto-save` to nil before starting to save manually. Empty and
+whitespace-only results have descriptive labels outside the text.
 
-For full ID, reason, source path, and line, use `C-h e` to read the latest
-AgentEdit announcement. From the control buffer, use `C-x b` to visit that source
-buffer, then `M-x goto-line` with the announced line to inspect the sentence.
-Return with `C-x b` to the Ediff control buffer to decide. Visiting source does
-not end the session. If you change an edit or its relevant context while reviewing,
-the reviewer stops; inspect the source and restart. Undo during an active pass may
-also invalidate a neighboring record, so finish or quit before undoing decisions.
+`C-c l` opens the persistent report; `M-x agentedit-review-report` reopens it
+after the session. It shows full IDs, reasons, original/proposed/custom text,
+source lines, per-file outcomes, and saved versus currently modified state.
+`g` refreshes, and `TAB`/`RET` follow source and recovered-draft links. If a
+source, disk file, or projection changes unexpectedly, the reviewer stops.
+Inspect the source and any recovered draft, then restart. Finish or quit before
+undoing decisions made during an active pass.
 
 See the [Emacs guide](../emacs/README.md) for installation and troubleshooting.
 
@@ -77,7 +81,7 @@ See the [Emacs guide](../emacs/README.md) for installation and troubleshooting.
 Use a disposable copy of [the review sample](../examples/readable-review.tex).
 Accept `sample-frequency`, reject `sample-speed`, and leave the paper untouched.
 The final sentence must read `The system usually terminates quickly.`. Each
-original/proposed pane should contain only one word. Undo twice to restore both
+pane should show the surrounding paragraph with the changed word marked. Undo twice to restore both
 complete blocks. The source-editor procedure and Emacs keys produce the same
 result.
 

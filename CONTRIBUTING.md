@@ -102,8 +102,8 @@ The harness makes live model calls and retains a disposable project under the
 printed temporary path. It verifies native dispatch with observational pre/post
 hooks, checks all eight editing cases with LF-terminated source, deliberately
 submits an unmarked edit and a partial revision, retries a complete frame, drives
-the actual Ediff A/R bindings, checks unsaved disk bytes and undo, explicitly
-saves, compiles original/proposed/strict PDFs, and transfers the reviewed source
+the actual Ediff A/R bindings, checks default automatic saving and undo,
+checks a manual-save pass and custom fragment staging, compiles original/proposed/strict PDFs, and transfers the reviewed source
 back to the agent. Failures retain transcripts and source for inspection.
 
 This is an automated test of a prepared project. It does not measure fresh

@@ -42,8 +42,14 @@ to accept, reject, or defer an edit while preserving the surrounding source.
 
 **In Emacs:** open a project `.tex` file and run `M-x agentedit-review`. Use `A`
 to accept, `R` to restore the original, or `S` to decide later. Each word or
-fragment stays an independent comparison. AUCTeX follows the complete master
-paper. Decisions remove the full frame, support undo, and do not save the buffer.
+fragment stays an independent comparison within its LaTeX paragraph. Use
+`C-c w` for the whole current file, `C-c e` to edit the result, and `C-c C-c`
+to stage a custom draft. AUCTeX follows the complete master paper. `A` and
+`R` remove the complete frame as one undo step and save the owning source by
+default, including any earlier unsaved edits in that file. Set
+`agentedit-review-auto-save` to nil before starting for manual saving; the
+invocation buffer's setting applies to the full review pass. `C-c l` opens a
+persistent report of each file's decisions and save status.
 See the [Emacs guide](emacs/README.md).
 
 Try both routes on the [disposable two-edit sample](examples/readable-review.tex).
