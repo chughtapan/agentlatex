@@ -151,7 +151,7 @@
           (delete-file path))))))
 
 
-(ert-deftest agentedit-readable-narrow-controls-keep-unsaved-status ()
+(ert-deftest agentedit-readable-narrow-controls-keep-save-policy ()
   (let ((source (generate-new-buffer " *readable status*")))
     (unwind-protect
         (with-temp-buffer
@@ -161,8 +161,8 @@
           (dolist (width '(40 60 80))
             (cl-letf (((symbol-function 'window-body-width) (lambda (&rest _) width)))
               (agentedit-review--mode-line-format)
-              (should (string-match-p "unsaved" agentedit-review--mode-status))
-              (should (string-match-p "A accept.*R reject.*S skip.*q quit" agentedit-review--mode-controls))
+              (should (string-match-p "MANUAL" agentedit-review--mode-controls))
+              (should (string-match-p "A/R/S q" agentedit-review--mode-controls))
               (should (<= (string-width (concat agentedit-review--mode-controls agentedit-review--mode-status agentedit-review--mode-counts)) width)))))
       (kill-buffer source))))
 
@@ -207,7 +207,8 @@
          (second (replace-regexp-in-string "word" "second" frame t t))
          (third (replace-regexp-in-string "word" "third" frame t t))
          (ediff-window-setup-function #'ediff-setup-windows-plain)
-         (ediff-keep-variants t))
+         (ediff-keep-variants t)
+        (agentedit-review-auto-save nil))
     (unwind-protect
         (with-current-buffer source
           (insert (concat "We " frame second third "finish."))
@@ -217,9 +218,9 @@
           (let* ((session (gethash source agentedit-review--sessions))
                  (control (agentedit-review-session-control session)))
             (with-current-buffer (agentedit-review-session-projection-a session)
-              (should (equal (buffer-string) "always")))
+              (should (equal (buffer-string) "We always always always finish.")))
             (with-current-buffer (agentedit-review-session-projection-b session)
-              (should (equal (buffer-string) "usually")))
+              (should (equal (buffer-string) "We usually always always finish.")))
             (switch-to-buffer source)
             (goto-char (agentedit-review-record-start (car (agentedit-review-session-records session))))
             (should (search-backward "We " nil t))
@@ -244,6 +245,7 @@
          (child-text (alist-get 'source (agentedit-readable-test--fixture "word")))
          (ediff-window-setup-function #'ediff-setup-windows-plain)
          (ediff-keep-variants t)
+        (agentedit-review-auto-save nil)
          sources session)
     (unwind-protect
         (progn

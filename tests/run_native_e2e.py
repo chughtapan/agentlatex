@@ -220,7 +220,7 @@ def main():
         raise AssertionError("Resolved strict PDF differs")
     shutil.copy2(pair, directory / "handoff.tex")
     run_host(directory, "handoff", (
-        "A human accepted and rejected the previous proposals, saved the source, "
+        "A human accepted and rejected the previous proposals, then saved the source, "
         "and transferred it to handoff.tex. In that file propose only quickly "
         "to promptly as one precise blocks-v1 record. Treat the current plain "
         "source as authoritative; do not recreate resolved records."
@@ -236,7 +236,7 @@ def main():
         seconds=round(time.monotonic() - started, 1),
         checks=["unmarked denial", "eight precise generated edits", "partial denial",
                 "complete revision", "original/proposed PDFs", "strict rejection",
-                "real Ediff A/R", "no implicit save", "exact undo", "explicit save",
+                "real Ediff A/R", "default verified save", "exact undo", "manual save",
                 "resolved strict PDF", "source transfer"],
     )
     events = [json.loads(line) for line in
