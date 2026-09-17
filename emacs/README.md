@@ -35,7 +35,8 @@ evaluate the form. No package build or server is required.
 ## Try a disposable two-edit review
 
 After cloning, this creates a separate sample and opens it in a fresh Emacs
-process. The installed `emacs` command must be version 29.4 or newer.
+process. If you already cloned to `~/agentlatex`, skip the `git clone` line.
+The installed `emacs` command must be version 29.4 or newer.
 
 ```sh
 git clone https://github.com/chughtapan/agentlatex.git "$HOME/agentlatex"
