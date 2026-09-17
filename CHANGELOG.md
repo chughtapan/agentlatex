@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0 - 2026-09-16
+
+### Added
+
+- Contextual Ediff paragraphs with a full current-file toggle, clean original
+  projections, visible active boundaries, and pending-record labels.
+- Edit, seed, stage, and cancel commands for custom results inside the active
+  fragment; failed drafts survive in named recovery buffers.
+- A persistent, refreshable per-file review report with source/recovery links,
+  full record details, scope, outcome counts, and save status.
+
+### Changed
+
+- Accept and reject save the entire owning source by default through native
+  Emacs saving. A buffer-local `agentedit-review-auto-save` nil setting before
+  invocation selects manual saving for the full pass.
+- Verify source snapshots, pane integrity, file target and disk freshness; stop
+  after save or teardown failures without silently reapplying a decision.
+
+
 ## 0.4.0 - 2026-09-08
 
 ### Added
